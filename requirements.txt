@@ -1,0 +1,7 @@
+Pillow
+h5py
+numpy
+torch
+tqdm
+matplotlib # for visualization
+scipy # for evaluation
