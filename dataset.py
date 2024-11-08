@@ -135,10 +135,10 @@ class ShapeNetDataModule(object):
         self.val_ds = ShapeNetDataset(
             self.hdf5_root,
             "val",
-            self.transform,
             self.target_categories,
+            self.transform,
             max_num_images_per_cat=self.max_num_images_per_cat,
-            label_offset=self.label_offset,
+            label_offset=self.label_offset
         )
 
         self.num_classes = self.train_ds.num_classes

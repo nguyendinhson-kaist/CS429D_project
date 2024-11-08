@@ -1,3 +1,7 @@
 data/
 __pycache__/
 .ipynb_checkpoints/
+*.ckpt 
+lightning_logs/
+mnist/
+wandb/
