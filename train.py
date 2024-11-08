@@ -155,6 +155,11 @@ if __name__ == "__main__":
         default=1000,
         help="diffusion Markov chain num steps",
     )
+    parser.add_argument(
+        "--transform",
+        default=None,
+        choices=[None, "v1"],
+    )
     parser.add_argument("--beta_1", type=float, default=1e-4)
     parser.add_argument("--beta_T", type=float, default=0.02)
     parser.add_argument("--seed", type=int, default=63)

@@ -6,6 +6,8 @@ from pathlib import Path
 import torch
 import torchvision.transforms as transforms
 from PIL import Image
+import volumentations as vol
+
 
 import numpy as np
 
@@ -118,12 +120,23 @@ class ShapeNetDataModule(object):
         self._set_dataset()
 
     def _set_dataset(self):
-        # TODO: Implement transforms
-        # if self.transform is None:
-        #     self.transform = transforms.Compose(
-        #         [
-        #         ]
-        #     )
+        if self.transform == 'v1': # soft augmentation
+            aug = vol.Compose([
+                vol.Flip(2, p=0.5),
+                vol.Rotate((0, 0), (-15, 15), (0, 0)),
+                vol.RandomScale([0.95, 1.05]),
+            ])
+            self.transform = aug
+        print("Setup valset...")
+        self.val_ds = ShapeNetDataset(
+            self.hdf5_root,
+            "val",
+            self.target_categories,
+            transform=None, # no augmentation for validation
+            max_num_images_per_cat=self.max_num_images_per_cat,
+            label_offset=self.label_offset,
+        )
+        print("Setup trainset...")
         self.train_ds = ShapeNetDataset(
             self.hdf5_root,
             "train",
@@ -131,14 +144,6 @@ class ShapeNetDataModule(object):
             self.transform,
             max_num_images_per_cat=self.max_num_images_per_cat,
             label_offset=self.label_offset
-        )
-        self.val_ds = ShapeNetDataset(
-            self.hdf5_root,
-            "val",
-            self.transform,
-            self.target_categories,
-            max_num_images_per_cat=self.max_num_images_per_cat,
-            label_offset=self.label_offset,
         )
 
         self.num_classes = self.train_ds.num_classes
@@ -164,7 +169,7 @@ class ShapeNetDataModule(object):
 
 if __name__ == "__main__":
     try:
-        data_module = ShapeNetDataModule("data", 'airplane', 32, 4, -1, 1)
+        data_module = ShapeNetDataModule("data", 'airplane', 32, 4, -1, 1, transform='v1')
         print("DataModule is set up successfully.")
     except Exception as e:
         print(e)
