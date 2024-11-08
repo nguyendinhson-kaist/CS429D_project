@@ -6,6 +6,7 @@ from pathlib import Path
 import torch
 import torchvision.transforms as transforms
 from PIL import Image
+from glob import glob
 
 import numpy as np
 
@@ -161,6 +162,115 @@ class ShapeNetDataModule(object):
             drop_last=False,
         )
     
+class ShapeNetDataset2(torch.utils.data.Dataset):
+    """
+        Load each voxel data individually.
+    """
+    def __init__(
+        self, root: str, split: str, target_category: str=None, transform=None, max_num_images_per_cat=-1,
+    ):
+        super().__init__()
+        assert split in ["train", "val", "test"], f"Invalid split: {split}"
+        self.root = root
+        self.split = split
+        self.transform = transform
+        self.max_num_images_per_cat = max_num_images_per_cat
+
+        categories = ['chair', 'airplane', 'table']
+        self.label_dict = {'chair': 1, 'airplane': 2, 'table': 3}
+
+        # assert target_categories
+        if target_category:
+            assert target_category in categories, f"Invalid categories: {target_category}"
+            categories = [target_category]
+
+        self.num_classes = len(categories)
+
+        paths = []
+        for cat in sorted(categories):
+            cat_dir = os.path.join(root, split, cat)
+            paths += glob(cat_dir + "/*.npy")[:max_num_images_per_cat]
+            
+        self.paths = paths
+
+    def __getitem__(self, idx):
+        path = self.paths[idx]
+        data = np.load(self.paths[idx])
+        label = self.label_dict[path.split("/")[-1].split("_")[0]]
+
+        if self.transform is not None:
+            data = self.transform(data)
+
+        return data, label
+
+    def __len__(self):
+        return len(self.paths)
+
+
+class ShapeNetDataModule2(object):
+    def __init__(
+        self,
+        root: str = "data",
+        target_categories: str=None,
+        batch_size: int = 32,
+        num_workers: int = 4,
+        max_num_images_per_cat: int = 1000,
+        transform=None
+    ):
+        self.root = root
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+        self.shapenet_root = os.path.join(root, "shapenet")
+        self.max_num_images_per_cat = max_num_images_per_cat
+        self.transform = transform
+        self.target_categories = target_categories
+
+        assert os.path.exists(self.shapenet_root), f"{self.shapenet_root} does not exist. Please download the dataset."
+
+        self._set_dataset()
+
+    def _set_dataset(self):
+        # TODO: Implement transforms
+        # if self.transform is None:
+        #     self.transform = transforms.Compose(
+        #         [
+        #         ]
+        #     )
+        self.train_ds = ShapeNetDataset2(
+            self.shapenet_root,
+            "train",
+            self.target_categories,
+            self.transform,
+            max_num_images_per_cat=self.max_num_images_per_cat,
+        )
+        self.val_ds = ShapeNetDataset2(
+            self.shapenet_root,
+            "val",
+            self.target_categories,
+            self.transform,
+            max_num_images_per_cat=self.max_num_images_per_cat,
+        )
+
+        self.num_classes = self.train_ds.num_classes
+
+    def train_dataloader(self):
+        return torch.utils.data.DataLoader(
+            self.train_ds,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            shuffle=True,
+            drop_last=True,
+        )
+
+    def val_dataloader(self):
+        return torch.utils.data.DataLoader(
+            self.val_ds,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            shuffle=False,
+            drop_last=False,
+        )
+
 
 if __name__ == "__main__":
     try:

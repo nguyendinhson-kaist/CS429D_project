@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from torch.nn import init
 import numpy as np
 
-num_group = 8
+num_group = 32
 
 class DownSample(nn.Module):
     def __init__(self, in_ch):

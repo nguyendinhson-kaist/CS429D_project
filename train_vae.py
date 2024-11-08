@@ -6,7 +6,7 @@ from pathlib import Path
 import matplotlib
 import matplotlib.pyplot as plt
 import torch
-from dataset import ShapeNetDataModule, get_data_iterator, tensor_to_pil_image
+from dataset import ShapeNetDataModule2, get_data_iterator, tensor_to_pil_image
 from models.autoencoder import AutoencoderKL
 from dotmap import DotMap
 from model import DiffusionModule
@@ -18,6 +18,7 @@ from lightning import Trainer
 from omegaconf import OmegaConf
 from lightning.pytorch.loggers import WandbLogger
 from lightning.pytorch.callbacks import ModelCheckpoint
+from lightning.pytorch.callbacks import LearningRateMonitor
 
 
 matplotlib.use("Agg")
@@ -36,7 +37,7 @@ def main(args):
 
     vae_config = OmegaConf.load(args.config)
 
-    ds_module = ShapeNetDataModule(
+    ds_module = ShapeNetDataModule2(
         "./data",
         target_categories=config.target_categories,
         batch_size=vae_config.data.batch_size,
@@ -57,17 +58,18 @@ def main(args):
     name = f"train_vae_{get_current_time()}"
     wandb_logger = WandbLogger(project="CS492D", name=name)
     checkpoint_callback = ModelCheckpoint(dirpath=f"logs/{name}", monitor="val/rec_loss", every_n_epochs=1)
-    trainer = Trainer(callbacks=[checkpoint_callback])
+    lr_monitor = LearningRateMonitor(logging_interval='step')
 
     trainer = Trainer(
                 logger=wandb_logger,
                 default_root_dir=f"logs/{name}",
-                callbacks=[checkpoint_callback],
+                callbacks=[checkpoint_callback, lr_monitor],
                 check_val_every_n_epoch=1,
-                max_epochs=50,
-                limit_train_batches=0.1,
+                max_epochs=100,
+                # limit_train_batches=0.5,
                 limit_val_batches=0.1,
                 log_every_n_steps=10,
+                accumulate_grad_batches=config.accumulate_grad,
                 )
     
     trainer.fit(autoencoder, train_dl, val_dl)
@@ -79,5 +81,6 @@ if __name__ == "__main__":
     parser.add_argument("--max_num_images_per_cat", type=int, default=1000)
     parser.add_argument("--target_categories", type=str, default=None)
     parser.add_argument("--config", type=str)
+    parser.add_argument("--accumulate_grad", type=int, default=1)
     args = parser.parse_args()
     main(args)

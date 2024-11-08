@@ -18,7 +18,7 @@ class AutoencoderKL(pl.LightningModule):
                  ddconfig,
                  embed_dim,
                  learning_rate,
-                 kl_weight=1.0e-06,
+                 kl_weight=1,
                  ckpt_path=None,
                  ignore_keys=[],
                  ):
@@ -70,10 +70,8 @@ class AutoencoderKL(pl.LightningModule):
                 weights=None):
         weight = torch.where(inputs == 1.0, 1.0, 3e-3)
         rec_loss = F.mse_loss(inputs.contiguous(), reconstructions.contiguous(), reduction="none")
-        # rec_loss = F.binary_cross_entropy_with_logits(reconstructions.contiguous(), inputs.contiguous(), reduction="none")
-        rec_loss = torch.sum(rec_loss * weight, dim=[1, 2, 3, 4]).mean()
+        rec_loss = torch.mean(rec_loss * weight)
         kl_loss = posteriors.kl()
-        kl_loss = torch.mean(kl_loss)
         loss = rec_loss + self.kl_weight * kl_loss
         return loss, {f"{split}/rec_loss": rec_loss, f"{split}/kl_loss": self.kl_weight  * kl_loss}
 
@@ -145,8 +143,8 @@ class AutoencoderKL(pl.LightningModule):
             log["samples"] = c2s(self.decode(torch.randn_like(posterior.sample())))
             log["reconstructions"] = c2s(xrec)
 
-            log["samples"] = torch.where(log["samples"] > 0.5, 1, 0)
-            log["reconstructions"] = torch.where(log["reconstructions"] > 0.5, 1, 0)
+            log["samples"] = torch.where(log["samples"] > 0.7, 1, 0)
+            log["reconstructions"] = torch.where(log["reconstructions"] > 0.7, 1, 0)
 
         log["inputs"] = c2s(x)
 
