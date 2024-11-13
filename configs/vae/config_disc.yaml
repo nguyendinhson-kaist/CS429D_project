@@ -21,6 +21,14 @@ model:
       attn_resolutions: []
       dropout: 0.1
       sigmoid_out: true
+    disc_config:
+      disc_start: 50
+      disc_weight: 0.5
+      disc_loss: "vanilla"
+      disc_conditional: false
+      disc_factor: 1.0
+      disc_in_channels: 8
+      disc_num_layers: 3
 data:
   batch_size: 8
   num_workers: 4
