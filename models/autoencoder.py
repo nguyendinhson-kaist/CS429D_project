@@ -12,10 +12,32 @@ from io import BytesIO
 from PIL import Image
 import wandb
 from pl_bolts.optimizers.lr_scheduler import LinearWarmupCosineAnnealingLR
+from models.discriminator import NLayerDiscriminator, weights_init
+
+def hinge_d_loss(logits_real, logits_fake):
+    loss_real = torch.mean(F.relu(1. - logits_real))
+    loss_fake = torch.mean(F.relu(1. + logits_fake))
+    d_loss = 0.5 * (loss_real + loss_fake)
+    return d_loss
+
+
+def vanilla_d_loss(logits_real, logits_fake):
+    d_loss = 0.5 * (
+        torch.mean(torch.nn.functional.softplus(-logits_real)) +
+        torch.mean(torch.nn.functional.softplus(logits_fake)))
+    return d_loss
+
+
+def adopt_weight(weight, global_step, threshold=0, value=0.):
+    if global_step < threshold:
+        weight = value
+    return weight
+
 
 class AutoencoderKL(pl.LightningModule):
     def __init__(self,
                  ddconfig,
+                 disc_config,
                  embed_dim,
                  learning_rate,
                  kl_weight=1,
@@ -23,6 +45,7 @@ class AutoencoderKL(pl.LightningModule):
                  ignore_keys=[],
                  ):
         super().__init__()
+        self.automatic_optimization = False
         self.encoder = Encoder(**ddconfig)
         self.decoder = Decoder(**ddconfig)
         assert ddconfig["double_z"]
@@ -33,6 +56,15 @@ class AutoencoderKL(pl.LightningModule):
         self.learning_rate = learning_rate
         if ckpt_path is not None:
             self.init_from_ckpt(ckpt_path, ignore_keys=ignore_keys)
+        
+        self.discriminator = NLayerDiscriminator(input_nc=disc_config.disc_in_channels,
+                                                 n_layers=disc_config.disc_num_layers,
+                                                 ).apply(weights_init)
+        self.discriminator_iter_start = disc_config.disc_start
+        self.disc_loss = hinge_d_loss if disc_config.disc_loss == "hinge" else vanilla_d_loss
+        self.disc_factor = disc_config.disc_factor
+        self.discriminator_weight = disc_config.disc_weight
+        self.disc_conditional = disc_config.disc_conditional
 
     def init_from_ckpt(self, path, ignore_keys=list()):
         sd = torch.load(path, map_location="cpu")["state_dict"]
@@ -64,54 +96,127 @@ class AutoencoderKL(pl.LightningModule):
             z = posterior.mode()
         dec = self.decode(z)
         return dec, posterior
+    
+    
+    def calculate_adaptive_weight(self, nll_loss, g_loss, last_layer=None):
+        if last_layer is not None:
+            nll_grads = torch.autograd.grad(nll_loss, last_layer, retain_graph=True)[0]
+            g_grads = torch.autograd.grad(g_loss, last_layer, retain_graph=True)[0]
+        else:
+            nll_grads = torch.autograd.grad(nll_loss, self.last_layer[0], retain_graph=True)[0]
+            g_grads = torch.autograd.grad(g_loss, self.last_layer[0], retain_graph=True)[0]
 
-    def loss(self, inputs, reconstructions, posteriors,
+        d_weight = torch.norm(nll_grads) / (torch.norm(g_grads) + 1e-4)
+        d_weight = torch.clamp(d_weight, 0.0, 1e4).detach()
+        d_weight = d_weight * self.discriminator_weight
+        return d_weight
+    
+
+    def loss(self, inputs, reconstructions, posteriors, optimizer_idx,
                 global_step, last_layer=None, cond=None, split="train",
                 weights=None):
         weight = torch.where(inputs == 1.0, 1.0, 3e-3)
-        rec_loss = F.mse_loss(inputs.contiguous(), reconstructions.contiguous(), reduction="none")
+        rec_loss = F.mse_loss(inputs.sum(dim=1).contiguous(), reconstructions.sum(dim=1).contiguous(), reduction="none")
         rec_loss = torch.mean(rec_loss * weight)
         kl_loss = posteriors.kl()
-        loss = rec_loss + self.kl_weight * kl_loss
-        return loss, {f"{split}/rec_loss": rec_loss, f"{split}/kl_loss": self.kl_weight  * kl_loss}
+        # loss = rec_loss + self.kl_weight * kl_loss
+        # return loss, {f"{split}/rec_loss": rec_loss, f"{split}/kl_loss": self.kl_weight  * kl_loss}
+
+         # now the GAN part
+        if optimizer_idx == 0:
+            # generator update
+            if cond is None:
+                assert not self.disc_conditional
+                logits_fake = self.discriminator(reconstructions.contiguous())
+            else:
+                assert self.disc_conditional
+                logits_fake = self.discriminator(torch.cat((reconstructions.contiguous(), cond), dim=1))
+            g_loss = -torch.mean(logits_fake)
+            if self.disc_factor > 0.0:
+                try:
+                    d_weight = self.calculate_adaptive_weight(rec_loss, g_loss, last_layer=last_layer)
+                except RuntimeError:
+                    assert not self.training
+                    d_weight = torch.tensor(0.0)
+            else:
+                d_weight = torch.tensor(0.0)
+
+            disc_factor = adopt_weight(self.disc_factor, global_step, threshold=self.discriminator_iter_start)
+            loss = rec_loss + self.kl_weight * kl_loss + d_weight * disc_factor * g_loss
+
+            log = {"{}/total_loss".format(split): loss.clone().detach().mean(),
+                   "{}/kl_loss".format(split): kl_loss.detach().mean(),
+                   "{}/rec_loss".format(split): rec_loss.detach().mean(),
+                   "{}/d_weight".format(split): d_weight.detach(),
+                   "{}/disc_factor".format(split): torch.tensor(disc_factor),
+                   "{}/g_loss".format(split): g_loss.detach().mean(),
+                   }
+            return loss, log
+
+        if optimizer_idx == 1:
+            # second pass for discriminator update
+            if cond is None:
+                logits_real = self.discriminator(inputs.contiguous().detach())
+                logits_fake = self.discriminator(reconstructions.contiguous().detach())
+            else:
+                logits_real = self.discriminator(torch.cat((inputs.contiguous().detach(), cond), dim=1))
+                logits_fake = self.discriminator(torch.cat((reconstructions.contiguous().detach(), cond), dim=1))
+
+            disc_factor = adopt_weight(self.disc_factor, global_step, threshold=self.discriminator_iter_start)
+            d_loss = disc_factor * self.disc_loss(logits_real, logits_fake)
+
+            log = {"{}/disc_loss".format(split): d_loss.clone().detach().mean(),
+                   "{}/logits_real".format(split): logits_real.detach().mean(),
+                   "{}/logits_fake".format(split): logits_fake.detach().mean()
+                   }
+            return d_loss, log
+        
 
     def get_input(self, batch):
         x, _ = batch
         x = x.unsqueeze(1).to(self.device)
         return s2c(x)
 
-    def training_step(self, batch, batch_idx,):
-        if batch_idx == 0:
+    def training_step(self, batch, batch_idx):
+        if batch_idx == 0 and self.global_step % 10 == 0:
             log_images = self.log_images(batch)
             self.logger.experiment.log(log_images)
         inputs = self.get_input(batch)
         reconstructions, posterior = self(inputs)
 
-        # if optimizer_idx == 0:
-        # train encoder+decoder+logvar
-        aeloss, log_dict_ae = self.loss(inputs, reconstructions, posterior, self.global_step,
-                                        last_layer=self.get_last_layer(), split="train")
+        g_opt, d_opt = self.optimizers()
+
+        # train encoder+decoder
+        aeloss, log_dict_ae = self.loss(inputs, reconstructions, posterior, global_step=self.global_step, 
+                                        optimizer_idx=0, last_layer=self.get_last_layer(), split="train")
         self.log("aeloss", aeloss, prog_bar=True, logger=True, on_step=True, on_epoch=True)
         self.log_dict(log_dict_ae, prog_bar=False, logger=True, on_step=True, on_epoch=False)
-        return aeloss
+        g_opt.zero_grad()
+        self.manual_backward(aeloss)
+        g_opt.step()
+        # return aeloss
 
-        # if optimizer_idx == 1:
-        #     # train the discriminator
-        #     discloss, log_dict_disc = self.loss(inputs, reconstructions, posterior, optimizer_idx, self.global_step,
-        #                                         last_layer=self.get_last_layer(), split="train")
 
-        #     self.log("discloss", discloss, prog_bar=True, logger=True, on_step=True, on_epoch=True)
-        #     self.log_dict(log_dict_disc, prog_bar=False, logger=True, on_step=True, on_epoch=False)
-        #     return discloss
+        # train the discriminator
+        discloss, log_dict_disc = self.loss(inputs, reconstructions, posterior, global_step=self.global_step, 
+                                            optimizer_idx=1, last_layer=self.get_last_layer(), split="train")
 
+        self.log("discloss", discloss, prog_bar=True, logger=True, on_step=True, on_epoch=True)
+        self.log_dict(log_dict_disc, prog_bar=False, logger=True, on_step=True, on_epoch=False)
+        d_opt.zero_grad()
+        self.manual_backward(discloss)
+        d_opt.step()
+        # return discloss
+
+    @torch.no_grad()
     def validation_step(self, batch, batch_idx):
         # if batch_idx == 0:
         #     log_images = self.log_images(batch)
         #     self.logger.experiment.log(log_images)
         inputs = self.get_input(batch)
         reconstructions, posterior = self(inputs)
-        aeloss, log_dict_ae = self.loss(inputs, reconstructions, posterior, self.global_step,
-                                        last_layer=self.get_last_layer(), split="val")
+        aeloss, log_dict_ae = self.loss(inputs, reconstructions, posterior, optimizer_idx=0, 
+                                        global_step=self.global_step, last_layer=self.get_last_layer(), split="val")
 
         self.log("val/rec_loss", log_dict_ae["val/rec_loss"])
         self.log_dict(log_dict_ae)
@@ -125,11 +230,11 @@ class AutoencoderKL(pl.LightningModule):
                                   list(self.post_quant_conv.parameters()),
                                   lr=lr, betas=(0.5, 0.9),
                                   weight_decay=1e-5)
-        # opt_disc = torch.optim.Adam(self.loss.discriminator.parameters(),
-        #                             lr=lr, betas=(0.5, 0.9))
-        # return [opt_ae, opt_disc], []
-        scheduler = LinearWarmupCosineAnnealingLR(opt_ae, warmup_epochs=2, max_epochs=50)
-        return [opt_ae], [{"scheduler": scheduler, "interval": "step"}]
+        opt_disc = torch.optim.Adam(self.discriminator.parameters(),
+                                    lr=lr, betas=(0.5, 0.9))
+        return [opt_ae, opt_disc], []
+        # scheduler = LinearWarmupCosineAnnealingLR(opt_ae, warmup_epochs=2, max_epochs=50)
+        # return [opt_ae], [{"scheduler": scheduler, "interval": "step"}]
 
     def get_last_layer(self):
         return self.decoder.conv_out.weight
@@ -143,8 +248,8 @@ class AutoencoderKL(pl.LightningModule):
             log["samples"] = c2s(self.decode(torch.randn_like(posterior.sample())))
             log["reconstructions"] = c2s(xrec)
 
-            log["samples"] = torch.where(log["samples"] > 0.7, 1, 0)
-            log["reconstructions"] = torch.where(log["reconstructions"] > 0.7, 1, 0)
+            log["samples"] = torch.where(log["samples"] > 0.5, 1, 0)
+            log["reconstructions"] = torch.where(log["reconstructions"] > 0.5, 1, 0)
 
         log["inputs"] = c2s(x)
 
