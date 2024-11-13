@@ -22,7 +22,7 @@ model:
       dropout: 0.1
       sigmoid_out: true
     disc_config:
-      disc_start: 50
+      disc_start: 5000
       disc_weight: 0.5
       disc_loss: "vanilla"
       disc_conditional: false

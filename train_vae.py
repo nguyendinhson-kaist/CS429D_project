@@ -67,10 +67,10 @@ def main(args):
                 callbacks=[checkpoint_callback, lr_monitor],
                 check_val_every_n_epoch=1,
                 max_epochs=100,
-                # limit_train_batches=0.5,
-                # limit_val_batches=0.1,
+                limit_train_batches=0.5,
+                limit_val_batches=0.1,
                 log_every_n_steps=10,
-                overfit_batches=1,
+                # overfit_batches=1,
                 accumulate_grad_batches=config.accumulate_grad,
                 )
     
