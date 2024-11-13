@@ -85,4 +85,5 @@ if __name__ == "__main__":
     parser.add_argument("--config", type=str)
     parser.add_argument("--accumulate_grad", type=int, default=1)
     args = parser.parse_args()
+    seed_everything(0)
     main(args)

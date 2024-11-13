@@ -223,9 +223,9 @@ class Encoder(nn.Module):
             if i_level != self.num_resolutions-1:
                 h = self.down[i_level].downsample(h)
         
-        # # middle
-        # h = self.mid.block_1(h)
-        # h = self.mid.block_2(h)
+        # middle
+        h = self.mid.block_1(h)
+        h = self.mid.block_2(h)
 
         # end
         h = self.norm_out(h)
@@ -302,9 +302,9 @@ class Decoder(nn.Module):
         # z to block_in
         h = self.conv_in(z)
 
-        # # middle
-        # h = self.mid.block_1(h)
-        # h = self.mid.block_2(h)
+        # middle
+        h = self.mid.block_1(h)
+        h = self.mid.block_2(h)
 
         # upsampling
         for i_level in reversed(range(self.num_resolutions-1)):
