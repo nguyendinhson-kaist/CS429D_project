@@ -66,9 +66,10 @@ def main(args):
                 callbacks=[checkpoint_callback, lr_monitor],
                 check_val_every_n_epoch=1,
                 max_epochs=100,
-                # limit_train_batches=0.5,
-                limit_val_batches=0.1,
-                log_every_n_steps=10,
+                # limit_train_batches=1,
+                # limit_val_batches=1,
+                # log_every_n_steps=1,
+                overfit_batches=1,
                 accumulate_grad_batches=config.accumulate_grad,
                 )
     
@@ -83,4 +84,5 @@ if __name__ == "__main__":
     parser.add_argument("--config", type=str)
     parser.add_argument("--accumulate_grad", type=int, default=1)
     args = parser.parse_args()
+    seed_everything(0)
     main(args)

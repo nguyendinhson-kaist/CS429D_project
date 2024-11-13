@@ -202,10 +202,10 @@ class Encoder(nn.Module):
                 curr_res //= 2
             self.down.append(module_dict)
         
-        # # middle
-        # self.mid = nn.Module()
-        # self.mid.block_1 = ResBlock(block_in, block_in, dropout, attn=True)
-        # self.mid.block_2 = ResBlock(block_in, block_in, dropout)
+        # middle
+        self.mid = nn.Module()
+        self.mid.block_1 = ResBlock(block_in, block_in, dropout, attn=True)
+        self.mid.block_2 = ResBlock(block_in, block_in, dropout)
 
         # end
         self.norm_out = nn.GroupNorm(num_group, block_in)
@@ -223,9 +223,9 @@ class Encoder(nn.Module):
             if i_level != self.num_resolutions-1:
                 h = self.down[i_level].downsample(h)
         
-        # # middle
-        # h = self.mid.block_1(h)
-        # h = self.mid.block_2(h)
+        # middle
+        h = self.mid.block_1(h)
+        h = self.mid.block_2(h)
 
         # end
         h = self.norm_out(h)
@@ -259,16 +259,16 @@ class Decoder(nn.Module):
                                        stride=1,
                                        padding=1)
         
-        # # middle
-        # self.mid = nn.Module()
-        # self.mid.block_1 = ResBlock(in_ch=block_in,
-        #                                out_ch=block_in,
-        #                                dropout=dropout,
-        #                                attn=True
-        #                             )
-        # self.mid.block_2 = ResBlock(in_ch=block_in,
-        #                                out_ch=block_in,
-        #                                dropout=dropout)
+        # middle
+        self.mid = nn.Module()
+        self.mid.block_1 = ResBlock(in_ch=block_in,
+                                       out_ch=block_in,
+                                       dropout=dropout,
+                                       attn=True
+                                    )
+        self.mid.block_2 = ResBlock(in_ch=block_in,
+                                       out_ch=block_in,
+                                       dropout=dropout)
         
         # upsampling
         self.up = nn.ModuleList()
@@ -302,9 +302,9 @@ class Decoder(nn.Module):
         # z to block_in
         h = self.conv_in(z)
 
-        # # middle
-        # h = self.mid.block_1(h)
-        # h = self.mid.block_2(h)
+        # middle
+        h = self.mid.block_1(h)
+        h = self.mid.block_2(h)
 
         # upsampling
         for i_level in reversed(range(self.num_resolutions-1)):
