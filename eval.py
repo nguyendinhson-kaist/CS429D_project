@@ -185,6 +185,12 @@ def lgan_mmd_cov(all_dist):
 if __name__ == "__main__":
     category = sys.argv[1]
     sample_path = sys.argv[2]
+    # threshold = float(sys.argv[2]) # for blur kernel
+    # print(f"category: {category}, threshold: {threshold}")
+    # downsample_ratio = r = int(sys.argv[2]) # for downsampled voxel
+    # threshold = float(sys.argv[3]) # for downsampled voxel
+    # print(f"category: {category}, downsample ratio: {downsample_ratio}, threshold: {threshold}")
+
     
     assert category in ["chair", "airplane", "table"], f"{category} should be one of `chair`, `airplane`, or `table`."
 
@@ -201,6 +207,29 @@ if __name__ == "__main__":
     test_set = torch.from_numpy(np.load(test_set_path))
     val_set = torch.from_numpy(np.load(val_set_path))
     X_ref = torch.cat([test_set, val_set]).float()
+
+    # # test code for blurry voxels
+    # import torch.nn as nn
+    # with torch.no_grad():
+    #     conv = nn.Conv3d(in_channels=1, out_channels=1, kernel_size=3, stride=1, padding=1, bias=False).cuda()
+    #     # Initialize weight of conv to make it as a mean filter
+    #     conv.weight.data.fill_(1.0/27)
+    #     X_ref_blurred = conv(X_ref.cuda().unsqueeze(1)).cpu()
+    #     X_gen = (X_ref_blurred > threshold).squeeze().float()
+    # print(X_gen.sum(), X_ref.sum())
+
+    # # test code for downsample->upsampled voxels
+    # from einops import rearrange
+    # from scipy.ndimage import zoom
+    # with torch.no_grad():
+    #     down = rearrange(X_ref, 'B (H h) (W w) (D d) -> B H W D (h w d)', h=r, w=r, d=r).sum(axis=-1)
+    #     down = (down >= 1.0).float()
+    #     up = zoom(down, (1, r, r, r), order=1)
+    #     X_gen = (up > threshold) * 1.0
+    # # to torch tensor
+    # X_gen = torch.from_numpy(X_gen).float()
+    # assert ((X_gen == 0.) | (X_gen == 1.)).all() 
+    # print(f"mean occupied voxels: generated {(X_gen.sum() / X_gen.shape[0]):.4f}, reference {(X_ref.sum() / X_ref.shape[0]):.4f}")
 
     print("[*] Computing JSD...")
     jsd_score = jensen_shannon_divergence(X_gen, X_ref)
