@@ -19,6 +19,7 @@ from omegaconf import OmegaConf
 from lightning.pytorch.loggers import WandbLogger
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.callbacks import LearningRateMonitor
+import wandb
 
 
 matplotlib.use("Agg")
@@ -57,7 +58,7 @@ def main(args):
     autoencoder.train()
 
     name = f"train_vae_{get_current_time()}"
-    wandb_logger = WandbLogger(project="CS492D", name=name)
+    wandb_logger = WandbLogger(project="CS492D", name=name, entity="CS492d_team20")
     checkpoint_callback = ModelCheckpoint(dirpath=f"logs/{name}", monitor="val/rec_loss", every_n_epochs=1, save_top_k=10)
     # lr_monitor = LearningRateMonitor(logging_interval='step')
 
