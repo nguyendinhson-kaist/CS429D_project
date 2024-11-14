@@ -179,9 +179,9 @@ class AutoencoderKL(pl.LightningModule):
         return s2c(x)
 
     def training_step(self, batch, batch_idx):
-        if batch_idx == 0 and self.global_step % 10 == 0:
-            log_images = self.log_images(batch)
-            self.logger.experiment.log(log_images)
+        # if batch_idx == 0 and self.global_step % 50 == 0:
+        #     log_images = self.log_images(batch)
+        #     self.logger.experiment.log(log_images)
         inputs = self.get_input(batch)
         reconstructions, posterior = self(inputs)
 
@@ -211,9 +211,9 @@ class AutoencoderKL(pl.LightningModule):
 
     @torch.no_grad()
     def validation_step(self, batch, batch_idx):
-        # if batch_idx == 0:
-        #     log_images = self.log_images(batch)
-        #     self.logger.experiment.log(log_images)
+        if batch_idx == 0:
+            log_images = self.log_images(batch)
+            self.logger.experiment.log(log_images)
         inputs = self.get_input(batch)
         reconstructions, posterior = self(inputs)
         aeloss, log_dict_ae = self.loss(inputs, reconstructions, posterior, optimizer_idx=0, 
