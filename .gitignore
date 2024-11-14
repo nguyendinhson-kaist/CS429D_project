@@ -6,3 +6,4 @@ lightning_logs/
 mnist/
 wandb/
 vae_reconstruction
+vae_reconstruction_origin

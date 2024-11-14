@@ -266,12 +266,12 @@ class AutoencoderKL(pl.LightningModule):
         save_data = []
         for batch in tqdm(val_dl):
             x = self.get_input(batch)
-            xrec, _ = self(x)
+            xrec, _ = self(x, sample_posterior=False)
             xrec = torch.where(c2s(xrec) > 0.5, 1, 0).squeeze(1)
             save_data.append(xrec.cpu().numpy())
         for batch in tqdm(test_dl):
             x = self.get_input(batch)
-            xrec, _ = self(x)
+            xrec, _ = self(x, sample_posterior=False)
             xrec = torch.where(c2s(xrec) > 0.5, 1, 0).squeeze(1)
             save_data.append(xrec.cpu().numpy())
         return np.concatenate(save_data, axis=0)

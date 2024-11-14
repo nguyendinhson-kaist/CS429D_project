@@ -2,7 +2,7 @@ import argparse
 import json
 from datetime import datetime
 from pathlib import Path
-from dataset import ShapeNetDataModule2
+from data.dataset import ShapeNetDataModule2
 from models.autoencoder import AutoencoderKL
 from dotmap import DotMap
 from pytorch_lightning import seed_everything

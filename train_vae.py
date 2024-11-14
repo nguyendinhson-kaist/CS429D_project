@@ -6,7 +6,7 @@ from pathlib import Path
 import matplotlib
 import matplotlib.pyplot as plt
 import torch
-from dataset import ShapeNetDataModule2, get_data_iterator, tensor_to_pil_image
+from data.dataset import ShapeNetDataModule2, get_data_iterator, tensor_to_pil_image
 from models.autoencoder import AutoencoderKL
 from dotmap import DotMap
 from model import DiffusionModule
