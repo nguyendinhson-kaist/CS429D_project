@@ -58,13 +58,13 @@ def main(args):
 
     name = f"train_vae_{get_current_time()}"
     wandb_logger = WandbLogger(project="CS492D", name=name)
-    checkpoint_callback = ModelCheckpoint(dirpath=f"logs/{name}", monitor="val/rec_loss", every_n_epochs=1)
-    lr_monitor = LearningRateMonitor(logging_interval='step')
+    checkpoint_callback = ModelCheckpoint(dirpath=f"logs/{name}", monitor="val/rec_loss", every_n_epochs=1, save_top_k=10)
+    # lr_monitor = LearningRateMonitor(logging_interval='step')
 
     trainer = Trainer(
                 logger=wandb_logger,
                 default_root_dir=f"logs/{name}",
-                callbacks=[checkpoint_callback, lr_monitor],
+                callbacks=[checkpoint_callback],
                 check_val_every_n_epoch=1,
                 max_epochs=100,
                 limit_train_batches=0.5,
@@ -80,7 +80,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--gpu", type=int, default=0)
-    parser.add_argument("--max_num_images_per_cat", type=int, default=1000)
+    parser.add_argument("--max_num_images_per_cat", type=int, default=-1)
     parser.add_argument("--target_categories", type=str, default=None)
     parser.add_argument("--config", type=str)
     parser.add_argument("--accumulate_grad", type=int, default=1)

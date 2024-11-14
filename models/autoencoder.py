@@ -13,6 +13,7 @@ from PIL import Image
 import wandb
 from pl_bolts.optimizers.lr_scheduler import LinearWarmupCosineAnnealingLR
 from models.discriminator import NLayerDiscriminator, weights_init
+from tqdm import tqdm
 
 def hinge_d_loss(logits_real, logits_fake):
     loss_real = torch.mean(F.relu(1. - logits_real))
@@ -258,6 +259,22 @@ class AutoencoderKL(pl.LightningModule):
             log[k] = wandb.Image(np.array(img))
 
         return log
+    
+    
+    @torch.no_grad()
+    def inference(self, test_dl, val_dl):
+        save_data = []
+        for batch in tqdm(val_dl):
+            x = self.get_input(batch)
+            xrec, _ = self(x)
+            xrec = torch.where(c2s(xrec) > 0.5, 1, 0).squeeze(1)
+            save_data.append(xrec.cpu().numpy())
+        for batch in tqdm(test_dl):
+            x = self.get_input(batch)
+            xrec, _ = self(x)
+            xrec = torch.where(c2s(xrec) > 0.5, 1, 0).squeeze(1)
+            save_data.append(xrec.cpu().numpy())
+        return np.concatenate(save_data, axis=0)
 
 def visualize_voxel(voxel_grid):
     """

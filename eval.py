@@ -7,6 +7,7 @@ import numpy as np
 import torch
 from scipy.spatial import cKDTree
 from tqdm import tqdm
+from einops import rearrange
 
 
 def voxel_to_pointcloud(voxel_grid: torch.Tensor, vox_res=(128, 128, 128)):
@@ -185,10 +186,19 @@ def lgan_mmd_cov(all_dist):
 if __name__ == "__main__":
     category = sys.argv[1]
     sample_path = sys.argv[2]
+    sparity = sys.argv[3]
     
     assert category in ["chair", "airplane", "table"], f"{category} should be one of `chair`, `airplane`, or `table`."
 
-    X_gen = torch.load(sample_path).float()
+    X_gen = torch.from_numpy(np.load(sample_path)).float()
+    if sparity is not None:
+        assert sparity in ['2', '4']
+        sparity = int(sparity)
+        X_gen = rearrange(X_gen, 'b (H h) (W w) (D d) -> b H W D (h w d)', h=sparity, w=sparity, d=sparity)
+        top1_values, top1_indices = torch.topk(X_gen, 1, dim=-1)
+        X_gen = torch.zeros_like(X_gen).scatter_(-1, top1_indices, top1_values)
+        X_gen = rearrange(X_gen, 'b H W D (h w d) -> b (H h) (W w) (D d)', h=sparity, w=sparity, d=sparity)
+
     # X_gen = torch.rand(1000, 128, 128, 128)  # For testing.
     # X_gen = (X_gen > 0.98).float()
 

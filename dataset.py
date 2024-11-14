@@ -214,7 +214,7 @@ class ShapeNetDataModule2(object):
         target_categories: str=None,
         batch_size: int = 32,
         num_workers: int = 4,
-        max_num_images_per_cat: int = 1000,
+        max_num_images_per_cat: int = -1,
         transform=None
     ):
         self.root = root
@@ -250,6 +250,13 @@ class ShapeNetDataModule2(object):
             self.transform,
             max_num_images_per_cat=self.max_num_images_per_cat,
         )
+        self.test_ds = ShapeNetDataset2(
+            self.shapenet_root,
+            "test",
+            self.target_categories,
+            self.transform,
+            max_num_images_per_cat=self.max_num_images_per_cat,
+        )
 
         self.num_classes = self.train_ds.num_classes
 
@@ -270,7 +277,15 @@ class ShapeNetDataModule2(object):
             shuffle=False,
             drop_last=False,
         )
-
+    
+    def test_dataloader(self):
+        return torch.utils.data.DataLoader(
+            self.test_ds,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            shuffle=False,
+            drop_last=False,
+        )
 
 if __name__ == "__main__":
     try:
