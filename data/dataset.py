@@ -287,6 +287,109 @@ class ShapeNetDataModule2(object):
             drop_last=False,
         )
 
+
+class ShapeNetLatentDataset(torch.utils.data.Dataset):
+    def __init__(
+        self, root: str, split: str, target_category: str=None, transform=None,
+    ):
+        super().__init__()
+        assert split in ["train", "val", "test"], f"Invalid split: {split}"
+        self.root = root
+        self.split = split
+        self.transform = transform
+
+        categories = ['chair', 'airplane', 'table']
+        self.label_dict = {'chair': 1, 'airplane': 2, 'table': 3}
+
+        # assert target_categories
+        if target_category:
+            assert target_category in categories, f"Invalid categories: {target_category}"
+            categories = [target_category]
+
+        self.num_classes = len(categories)
+
+        paths = []
+        for cat in sorted(categories):
+            cat_dir = os.path.join(root, split, cat)
+            paths += glob(cat_dir + "/*.npy")
+            
+        self.paths = paths
+
+    def __getitem__(self, idx):
+        path = self.paths[idx]
+        data = np.load(self.paths[idx])
+        label = self.label_dict[path.split("/")[-2]]
+
+        if self.transform is not None:
+            data = self.transform(data)
+
+        return data, label
+
+    def __len__(self):
+        return len(self.paths)
+
+
+class ShapeNetLatentModule(object):
+    def __init__(
+        self,
+        root: str = "data",
+        target_categories: str=None,
+        batch_size: int = 32,
+        num_workers: int = 4,
+        transform=None
+    ):
+        self.root = root
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+        self.shapenet_root = os.path.join(root, "latent_data")
+        self.transform = transform
+        self.target_categories = target_categories
+
+        assert os.path.exists(self.shapenet_root), f"{self.shapenet_root} does not exist. Please download the dataset."
+
+        self._set_dataset()
+
+    def _set_dataset(self):
+        # TODO: Implement transforms
+        # if self.transform is None:
+        #     self.transform = transforms.Compose(
+        #         [
+        #         ]
+        #     )
+        self.train_ds = ShapeNetLatentDataset(
+            self.shapenet_root,
+            "train",
+            self.target_categories,
+            self.transform,
+        )
+        self.val_ds = ShapeNetLatentDataset(
+            self.shapenet_root,
+            "val",
+            self.target_categories,
+            self.transform,
+        )
+
+        self.num_classes = self.train_ds.num_classes
+
+    def train_dataloader(self):
+        return torch.utils.data.DataLoader(
+            self.train_ds,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            shuffle=True,
+            drop_last=True,
+        )
+
+    def val_dataloader(self):
+        return torch.utils.data.DataLoader(
+            self.val_ds,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            shuffle=False,
+            drop_last=False,
+        )
+    
+
 if __name__ == "__main__":
     try:
         data_module = ShapeNetDataModule("data", 'airplane', 32, 4, -1, 1)

@@ -76,11 +76,11 @@ class DDPMScheduler(BaseScheduler):
         One step denoising function of DDPM: x_t -> x_{t-1}.
 
         Input:
-            x_t (`torch.Tensor [B,C,H,W]`): samples at arbitrary timestep t.
+            x_t (`torch.Tensor [B,C,H,W,D]`): samples at arbitrary timestep t.
             t (`int`): current timestep in a reverse process.
-            eps_theta (`torch.Tensor [B,C,H,W]`): predicted noise from a learned model.
+            eps_theta (`torch.Tensor [B,C,H,W,D]`): predicted noise from a learned model.
         Ouptut:
-            sample_prev (`torch.Tensor [B,C,H,W]`): one step denoised sample. (= x_{t-1})
+            sample_prev (`torch.Tensor [B,C,H,W,D]`): one step denoised sample. (= x_{t-1})
         """
 
         ######## TODO ########
@@ -91,7 +91,6 @@ class DDPMScheduler(BaseScheduler):
         alphas_prod_t = self._get_teeth(self.alphas_cumprod, t)
         alphas_t = self._get_teeth(self.alphas, t)
         sigma_t = self._get_teeth(self.sigmas, t)
-
         mu_t = (1/(alphas_t.sqrt())) * (x_t - ((1-alphas_t)/((1-alphas_prod_t).sqrt())) * eps_theta)
 
         eps = torch.randn(x_t.shape, device='cuda')
@@ -104,7 +103,7 @@ class DDPMScheduler(BaseScheduler):
     # https://nn.labml.ai/diffusion/ddpm/utils.html
     def _get_teeth(self, consts: torch.Tensor, t: torch.Tensor): # get t th const 
         const = consts.gather(-1, t)
-        return const.reshape(-1, 1, 1, 1)
+        return const.reshape(-1, 1, 1, 1, 1)
     
     def add_noise(
         self,
@@ -116,16 +115,16 @@ class DDPMScheduler(BaseScheduler):
         A forward pass of a Markov chain, i.e., q(x_t | x_0).
 
         Input:
-            x_0 (`torch.Tensor [B,C,H,W]`): samples from a real data distribution q(x_0).
+            x_0 (`torch.Tensor [B,C,H,W,D]`): samples from a real data distribution q(x_0).
             t: (`torch.IntTensor [B]`)
-            eps: (`torch.Tensor [B,C,H,W]`, optional): if None, randomly sample Gaussian noise in the function.
+            eps: (`torch.Tensor [B,C,H,W,D]`, optional): if None, randomly sample Gaussian noise in the function.
         Output:
-            x_t: (`torch.Tensor [B,C,H,W]`): noisy samples at timestep t.
-            eps: (`torch.Tensor [B,C,H,W]`): injected noise.
+            x_t: (`torch.Tensor [B,C,H,W,D]`): noisy samples at timestep t.
+            eps: (`torch.Tensor [B,C,H,W,D]`): injected noise.
         """
         
         if eps is None:
-            eps       = torch.randn(x_0.shape, device='cuda')
+            eps = torch.randn(x_0.shape, device=x_0.device)
 
         ######## TODO ########
         # DO NOT change the code outside this part.

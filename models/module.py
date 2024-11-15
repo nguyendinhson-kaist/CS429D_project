@@ -18,7 +18,7 @@ class DownSample(nn.Module):
         init.xavier_uniform_(self.main.weight)
         init.zeros_(self.main.bias)
 
-    def forward(self, x):
+    def forward(self, x, temb=None):
         x = self.main(x)
         return x
 
@@ -33,8 +33,7 @@ class UpSample(nn.Module):
         init.xavier_uniform_(self.main.weight)
         init.zeros_(self.main.bias)
 
-    def forward(self, x):
-        # import pdb; pdb.set_trace()
+    def forward(self, x, temb=None):
         x = F.interpolate(x, scale_factor=2, mode="nearest")
         x = self.main(x)
         return x
@@ -86,7 +85,6 @@ class ResBlock(nn.Module):
             nn.SiLU(),
             nn.Conv3d(in_ch, out_ch, 3, stride=1, padding=1,),
         )
-
         if tdim > 0:
             self.temb_proj = nn.Sequential(
                 nn.SiLU(),
@@ -121,7 +119,7 @@ class ResBlock(nn.Module):
     def forward(self, x, temb=None):
         h = self.block1(x)
         if temb is not None:
-            h += self.temb_proj(temb)[:, :, None, None]
+            h += self.temb_proj(temb)[:, :, None, None, None]
         h = self.block2(h)
 
         h = h + self.shortcut(x)

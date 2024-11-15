@@ -1,7 +1,7 @@
 import torch
 import lightning as pl
 from models.module import Encoder, Decoder
-from models.util import instantiate_from_config, s2c, c2s
+from models.util import instantiate_from_config, s2c, c2s, visualize_voxel
 from models.distribution import DiagonalGaussianDistribution
 import torch.nn.functional as F
 import numpy as np
@@ -11,7 +11,6 @@ from mpl_toolkits.mplot3d import Axes3D
 from io import BytesIO
 from PIL import Image
 import wandb
-from pl_bolts.optimizers.lr_scheduler import LinearWarmupCosineAnnealingLR
 from models.discriminator import NLayerDiscriminator, weights_init
 from tqdm import tqdm
 
@@ -40,7 +39,7 @@ class AutoencoderKL(pl.LightningModule):
                  ddconfig,
                  disc_config,
                  embed_dim,
-                 learning_rate,
+                 learning_rate=0,
                  kl_weight=1,
                  ckpt_path=None,
                  ignore_keys=[],
@@ -263,6 +262,7 @@ class AutoencoderKL(pl.LightningModule):
     
     @torch.no_grad()
     def inference(self, test_dl, val_dl):
+        self.eval()
         save_data = []
         for batch in tqdm(val_dl):
             x = self.get_input(batch)
@@ -274,46 +274,5 @@ class AutoencoderKL(pl.LightningModule):
             xrec, _ = self(x, sample_posterior=False)
             xrec = torch.where(c2s(xrec) > 0.5, 1, 0).squeeze(1)
             save_data.append(xrec.cpu().numpy())
+        self.train()
         return np.concatenate(save_data, axis=0)
-
-def visualize_voxel(voxel_grid):
-    """
-    Visualizes a 3D binary voxel grid using matplotlib.
-
-    Parameters:
-    voxel_grid (numpy.ndarray): A 3D binary voxel grid where 1 indicates occupancy and 0 indicates empty.
-    """
-
-    # Get the coordinates of occupied voxels
-    occupied_voxels = np.argwhere(voxel_grid == 1)
-
-    # Create a 3D plot
-    fig = plt.figure()
-    plt.tight_layout()
-
-    ax = fig.add_subplot(111, projection='3d')
-
-    # Plot occupied voxels as scatter points
-    ax.scatter(occupied_voxels[:, 0], occupied_voxels[:, 2], occupied_voxels[:, 1])
-
-    # Set labels
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.set_zlabel('Z')
-
-    # Set the aspect ratio to be equal
-    ax.set_box_aspect([1, 1, 1])
-
-    # Set the limits for the axes
-    ax.set_xlim([0, voxel_grid.shape[0]])
-    ax.set_ylim([0, voxel_grid.shape[1]])
-    ax.set_zlim([0, voxel_grid.shape[2]])
-    
-    ax.axis("off")
-    buf = BytesIO()
-    plt.savefig(buf, format='png')
-    buf.seek(0)  # Move the buffer cursor to the beginning
-    plt.close()
-    # Convert the buffer into a Pillow Image
-    img = Image.open(buf)
-    return img

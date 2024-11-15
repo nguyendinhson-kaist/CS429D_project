@@ -6,8 +6,8 @@ from pathlib import Path
 import matplotlib
 import matplotlib.pyplot as plt
 import torch
-from data.dataset import ShapeNetDataModule2, get_data_iterator, tensor_to_pil_image
-from models.autoencoder import AutoencoderKL
+from data.dataset import ShapeNetLatentModule
+from models.diffusion import Diffusion
 from dotmap import DotMap
 from model import DiffusionModule
 from pytorch_lightning import seed_everything
@@ -36,30 +36,41 @@ def main(args):
     config.update(vars(args))
     config.device = f"cuda:{args.gpu}"
 
-    vae_config = OmegaConf.load(args.config)
+    model_config = OmegaConf.load(args.config)
 
-    ds_module = ShapeNetDataModule2(
+    ds_module = ShapeNetLatentModule(
         "./data",
         target_categories=config.target_categories,
-        batch_size=vae_config.data.batch_size,
-        num_workers=vae_config.data.num_workers,
-        max_num_images_per_cat=config.max_num_images_per_cat,
+        batch_size=model_config.data.batch_size,
+        num_workers=model_config.data.num_workers,
     )
 
     train_dl = ds_module.train_dataloader()
     val_dl = ds_module.val_dataloader()
 
-    autoencoder = AutoencoderKL(ddconfig=vae_config.model.params.ddconfig,
-                                disc_config=vae_config.model.params.disc_config,
-                                kl_weight=vae_config.model.params.kl_weight, 
-                                embed_dim=vae_config.model.params.embed_dim,
-                                learning_rate=vae_config.model.learning_rate)
-    autoencoder.to(config.device)
-    autoencoder.train()
+    var_scheduler = DDPMScheduler(
+        num_train_timesteps=model_config.scheduler.num_train_timesteps,
+        beta_1=model_config.scheduler.beta_1,
+        beta_T=model_config.scheduler.beta_T,
+        mode=model_config.scheduler.mode,
+        sigma_type=model_config.scheduler.sigma_type,
+    )
 
-    name = f"train_vae_{get_current_time()}"
+    diffusion_model = Diffusion(
+        unet_config=model_config.model.params,
+        vae_config=model_config.model.vae,
+        learning_rate=model_config.model.learning_rate,
+        var_scheduler=var_scheduler,
+        ckpt_path=None,
+        ignore_keys=["discriminator"],
+        num_classes=ds_module.num_classes,
+    )
+    diffusion_model.to(config.device)
+    diffusion_model.train()
+
+    name = f"ldm_{get_current_time()}"
     wandb_logger = WandbLogger(project="CS492D", name=name, entity="CS492d_team20")
-    checkpoint_callback = ModelCheckpoint(dirpath=f"logs/{name}", monitor="val/rec_loss", every_n_epochs=1, save_top_k=10)
+    checkpoint_callback = ModelCheckpoint(dirpath=f"logs/{name}", monitor="val/loss", every_n_epochs=1, save_top_k=10)
     # lr_monitor = LearningRateMonitor(logging_interval='step')
 
     trainer = Trainer(
@@ -67,24 +78,24 @@ def main(args):
                 default_root_dir=f"logs/{name}",
                 callbacks=[checkpoint_callback],
                 check_val_every_n_epoch=1,
-                max_epochs=100,
-                log_every_n_steps=10,
+                max_epochs=config.max_epochs,
                 accumulate_grad_batches=config.accumulate_grad,
+                log_every_n_steps=50,
+                # overfit_batches=10,
                 # limit_train_batches=0.5,
                 # limit_val_batches=0.1,
-                # overfit_batches=1,
                 )
     
-    trainer.fit(autoencoder, train_dl, val_dl)
+    trainer.fit(diffusion_model, train_dl, val_dl)
 
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--gpu", type=int, default=0)
-    parser.add_argument("--max_num_images_per_cat", type=int, default=-1)
     parser.add_argument("--target_categories", type=str, default=None)
     parser.add_argument("--config", type=str)
     parser.add_argument("--accumulate_grad", type=int, default=1)
+    parser.add_argument("--max_epochs", type=int, default=10)
     args = parser.parse_args()
     seed_everything(0)
     main(args)

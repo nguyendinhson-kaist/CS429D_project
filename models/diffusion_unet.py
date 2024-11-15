@@ -4,14 +4,15 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from models.module import DownSample, ResBlock, Swish, TimeEmbedding, UpSample
+from models.module import DownSample, ResBlock, TimeEmbedding, UpSample
 from torch.nn import init
 
 
 class UNet(nn.Module):
-    def __init__(self, T=1000, image_resolution=64, ch=128, ch_mult=[1,2,2,2], attn=[1], num_res_blocks=4, dropout=0.1, use_cfg=False, cfg_dropout=0.1, num_classes=None):
+    def __init__(self, resolution=8, in_ch=1, ch=128, ch_mult=[1,2,2,4], attn=[1], num_res_blocks=4,
+                dropout=0.1, use_cfg=False, cfg_dropout=0.1, num_classes=None, **kwargs):
         super().__init__()
-        self.image_resolution = image_resolution
+        self.resolution = resolution
         assert all([i < len(ch_mult) for i in attn]), 'attn index out of bound'
         tdim = ch * 4
         # self.time_embedding = TimeEmbedding(T, ch, tdim)
@@ -24,8 +25,7 @@ class UNet(nn.Module):
             assert num_classes is not None
             cdim = tdim
             self.class_embedding = nn.Embedding(num_classes+1, cdim)
-
-        self.head = nn.Conv2d(3, ch, kernel_size=3, stride=1, padding=1)
+        self.head = nn.Conv3d(in_ch, ch, kernel_size=3, stride=1, padding=1)
         self.downblocks = nn.ModuleList()
         chs = [ch]  # record output channel when dowmsample for upsample
         now_ch = ch
@@ -42,8 +42,8 @@ class UNet(nn.Module):
                 chs.append(now_ch)
 
         self.middleblocks = nn.ModuleList([
-            ResBlock(now_ch, now_ch, tdim, dropout, attn=True),
-            ResBlock(now_ch, now_ch, tdim, dropout, attn=False),
+            ResBlock(now_ch, now_ch, tdim=tdim, dropout=dropout, attn=True),
+            ResBlock(now_ch, now_ch, tdim=tdim, dropout=dropout, attn=False),
         ])
 
         self.upblocks = nn.ModuleList()
@@ -60,8 +60,8 @@ class UNet(nn.Module):
 
         self.tail = nn.Sequential(
             nn.GroupNorm(32, now_ch),
-            Swish(),
-            nn.Conv2d(now_ch, 3, 3, stride=1, padding=1)
+            nn.SiLU(),
+            nn.Conv3d(now_ch, in_ch, 3, stride=1, padding=1)
         )
         self.initialize()
 

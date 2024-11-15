@@ -47,7 +47,7 @@ def main(args):
                                 ckpt_path=args.ckpt,
                                 ignore_keys=['discriminator'])
     autoencoder.to(config.device)
-    
+    autoencoder.eval()
     rec_data = autoencoder.inference(test_dl, val_dl)
     np.save(f"./{save_dir}/rec_data.npy", rec_data)
 
