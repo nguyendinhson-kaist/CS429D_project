@@ -11,6 +11,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from io import BytesIO
 from PIL import Image
 import wandb
+import plotly.graph_objects as go
 from pl_bolts.optimizers.lr_scheduler import LinearWarmupCosineAnnealingLR
 from models.discriminator import NLayerDiscriminator, weights_init
 from tqdm import tqdm
@@ -254,9 +255,15 @@ class AutoencoderKL(pl.LightningModule):
 
         log["inputs"] = c2s(x)
 
+        plotly_samples = get_voxel_plotly(log["samples"][0].squeeze().cpu().numpy())
+        plotly_reconstructions = get_voxel_plotly(log["reconstructions"][0].squeeze().cpu().numpy())
+
         for k, v in log.items():
             img = visualize_voxel(v[0].squeeze().cpu().numpy())
             log[k] = wandb.Image(np.array(img))
+        
+        log["plotly/samples"] = wandb.Plotly(plotly_samples)
+        log["plotly/reconstructions"] = wandb.Plotly(plotly_reconstructions)
 
         return log
     
@@ -275,6 +282,50 @@ class AutoencoderKL(pl.LightningModule):
             xrec = torch.where(c2s(xrec) > 0.5, 1, 0).squeeze(1)
             save_data.append(xrec.cpu().numpy())
         return np.concatenate(save_data, axis=0)
+
+
+def get_voxel_plotly(voxel_grid, lim=128):
+    """
+    Visualizes a 3D binary voxel grid using Plotly.
+
+    Parameters:
+    voxel_grid (numpy.ndarray): A 3D binary voxel grid where 1 indicates occupancy and 0 indicates empty.
+    """
+
+    # change to numpy if needed
+    if isinstance(voxel_grid, torch.Tensor):
+        voxel_grid = voxel_grid.cpu().numpy()
+
+    # Get the coordinates of occupied voxels
+    occupied_voxels = np.argwhere(voxel_grid == 1)
+
+    # Create a 3D scatter plot
+    fig = go.Figure(data=[go.Scatter3d(
+        x=occupied_voxels[:, 0],
+        y=occupied_voxels[:, 2],
+        z=occupied_voxels[:, 1],
+        mode='markers',
+        marker=dict(
+            size=2,
+            color='blue',
+        )
+    )])
+
+    # Set labels
+    fig.update_layout(
+        scene=dict(
+            xaxis_title='X',
+            yaxis_title='Y',
+            zaxis_title='Z',
+            aspectmode='data',
+            xaxis=dict(range=[0, lim]),
+            yaxis=dict(range=[0, lim]),
+            zaxis=dict(range=[0, lim])
+        )
+    )
+
+    return fig
+
 
 def visualize_voxel(voxel_grid):
     """

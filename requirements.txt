@@ -19,3 +19,5 @@ wandb
 lightning
 einops
 lightning-bolts
+volumentations
+plotly

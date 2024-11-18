@@ -1,4 +1,6 @@
 import os
+from typing import List
+import volumentations as vol
 from itertools import chain
 from multiprocessing.pool import Pool
 from pathlib import Path
@@ -7,6 +9,7 @@ import torch
 import torchvision.transforms as transforms
 from PIL import Image
 from glob import glob
+from utils import box_blur
 
 import numpy as np
 
@@ -215,46 +218,74 @@ class ShapeNetDataModule2(object):
         batch_size: int = 32,
         num_workers: int = 4,
         max_num_images_per_cat: int = -1,
-        transform=None
+        transform:str=None
     ):
         self.root = root
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.shapenet_root = os.path.join(root, "shapenet")
         self.max_num_images_per_cat = max_num_images_per_cat
-        self.transform = transform
+        self._set_transform(transform)
         self.target_categories = target_categories
 
         assert os.path.exists(self.shapenet_root), f"{self.shapenet_root} does not exist. Please download the dataset."
 
         self._set_dataset()
 
+    def _set_transform(self, transform_list:List[str]=None):
+        '''
+        Set train_transform and val_transform attributes.
+        '''
+        self.train_transform = None
+        self.val_transform = None
+
+        if transform_list is None:
+            return
+
+        assert len(transform_list) == 1, f"Currently flip or box but got {transform_list}"
+        if transform_list[0] == 'flip':
+            vol_aug = vol.Compose([vol.Flip(2, p=0.5)])
+            def volumentation_transform(data):
+                return vol_aug(image=data)['image']
+            self.train_transform = volumentation_transform
+        elif transform_list[0] == 'box':
+            self.train_transform = box_blur
+
+        # for tf in transform_list:
+        #     tf = tf.lower()
+        #     if tf == 'flip':
+        #         to_compose.append(vol.Flip(2, p=0.5))
+        #     # elif tf == 'rotate':
+        #     #     to_compose.append(vol.Rotate((0, 0), (-15, 15), (0, 0)))
+        #     # elif tf == 'scale':
+        #     #     to_compose.append(vol.RandomScale([0.95, 1.05]))
+        # composed = vol.Compose(to_compose)
+        # def volumentation_transform(data):
+        #     return composed(image=data)['image']
+        
+        # self.train_transform = volumentation_transform
+
+
     def _set_dataset(self):
-        # TODO: Implement transforms
-        # if self.transform is None:
-        #     self.transform = transforms.Compose(
-        #         [
-        #         ]
-        #     )
         self.train_ds = ShapeNetDataset2(
             self.shapenet_root,
             "train",
             self.target_categories,
-            self.transform,
+            self.train_transform,
             max_num_images_per_cat=self.max_num_images_per_cat,
         )
         self.val_ds = ShapeNetDataset2(
             self.shapenet_root,
             "val",
             self.target_categories,
-            self.transform,
+            self.val_transform,
             max_num_images_per_cat=self.max_num_images_per_cat,
         )
         self.test_ds = ShapeNetDataset2(
             self.shapenet_root,
             "test",
             self.target_categories,
-            self.transform,
+            self.val_transform,
             max_num_images_per_cat=self.max_num_images_per_cat,
         )
 
