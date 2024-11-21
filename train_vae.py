@@ -44,6 +44,7 @@ def main(args):
         batch_size=vae_config.data.batch_size,
         num_workers=vae_config.data.num_workers,
         max_num_images_per_cat=config.max_num_images_per_cat,
+        transform=config.transform,
     )
 
     train_dl = ds_module.train_dataloader()
@@ -57,7 +58,8 @@ def main(args):
     autoencoder.to(config.device)
     autoencoder.train()
 
-    name = f"train_vae_{get_current_time()}"
+    suffix = f"_{config.exp_name}" if config.exp_name else ""
+    name = f"train_vae_{get_current_time()}" + suffix
     wandb_logger = WandbLogger(project="CS492D", name=name, entity="CS492d_team20")
     checkpoint_callback = ModelCheckpoint(dirpath=f"logs/{name}", monitor="val/rec_loss", every_n_epochs=1, save_top_k=10)
     # lr_monitor = LearningRateMonitor(logging_interval='step')
@@ -80,11 +82,13 @@ def main(args):
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("--exp_name", default='', type=str)
     parser.add_argument("--gpu", type=int, default=0)
     parser.add_argument("--max_num_images_per_cat", type=int, default=-1)
     parser.add_argument("--target_categories", type=str, default=None)
     parser.add_argument("--config", type=str)
     parser.add_argument("--accumulate_grad", type=int, default=1)
+    parser.add_argument("--transform", type=str, nargs="+", default=None)
     args = parser.parse_args()
     seed_everything(0)
     main(args)
