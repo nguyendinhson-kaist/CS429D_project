@@ -6,14 +6,14 @@ from io import BytesIO
 import numpy as np
 from PIL import Image
 
-def s2c(data, h=2, w=2, d=2):
+def s2c(data, h=1, w=1, d=1):
     """
     Convert spatial data to channel data to reduce memory usage.
         - Embedding a cube of size (h, w, d) into a single voxel
     """
     return rearrange(data, 'b c (H h) (W w) (D d) -> b (c h w d) H W D', h=h, w=w, d=d )
 
-def c2s(data, h=2, w=2, d=2):
+def c2s(data, h=1, w=1, d=1):
     """
     Convert channel data to spatial data.
         - Transform a single voxel back into a cube of size (h, w, d)
