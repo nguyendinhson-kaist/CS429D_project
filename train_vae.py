@@ -69,7 +69,7 @@ def main(args):
                 default_root_dir=f"logs/{name}",
                 callbacks=[checkpoint_callback],
                 check_val_every_n_epoch=1,
-                max_epochs=100,
+                max_epochs=500,
                 log_every_n_steps=10,
                 accumulate_grad_batches=config.accumulate_grad,
                 # limit_train_batches=0.5,
