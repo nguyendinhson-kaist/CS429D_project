@@ -74,7 +74,7 @@ class UNet(nn.Module):
     def forward(self, x, timestep, class_label=None):
         # Timestep embedding
         temb = self.time_embedding(timestep)
-
+    
         if self.use_cfg and class_label is not None:
             if self.training:
                 assert not torch.any(class_label == 0) # 0 for null.

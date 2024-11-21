@@ -7,6 +7,7 @@ import torch.nn.functional as F
 import numpy as np
 from tqdm import tqdm
 from typing import Optional
+from einops import rearrange
 
 
 class Diffusion(pl.LightningModule):
@@ -58,7 +59,7 @@ class Diffusion(pl.LightningModule):
         timestep = self.var_scheduler.uniform_sample_t(B, self.device)
 
         xt, eps = self.var_scheduler.add_noise(x0, timestep)
-        pred_noise = self.network(xt, timestep)
+        pred_noise = self.network(xt, timestep, class_label=label)
 
         loss = F.mse_loss(pred_noise, eps)
         self.log("train/loss", loss)
@@ -67,7 +68,7 @@ class Diffusion(pl.LightningModule):
 
     @torch.no_grad()
     def validation_step(self, batch, batch_idx):
-        if batch_idx == 0:
+        if batch_idx == 0 and self.current_epoch % 10 == 0:
             log_dict = self.log_images()
             self.logger.log_image(**log_dict)
 
@@ -79,7 +80,7 @@ class Diffusion(pl.LightningModule):
         timestep = self.var_scheduler.uniform_sample_t(B, self.device)
 
         xt, eps = self.var_scheduler.add_noise(x0, timestep)
-        pred_noise = self.network(xt, timestep)
+        pred_noise = self.network(xt, timestep, class_label=label)
 
         loss = F.mse_loss(pred_noise, eps)
         self.log("val/loss", loss)
@@ -145,14 +146,26 @@ class Diffusion(pl.LightningModule):
         class_label = torch.tensor([1,2,3]).to(self.device)
         z0 = self.sample(3, class_label=class_label)
         x0 = self.vae.decode(z0)
-        x0 = torch.where(c2s(x0) > 0.5, 1, 0).squeeze().cpu().numpy()
+        x0 = rearrange(x0, 'b c h w d -> b h w d c')
+
+        # Density reduction to make visualization faster
+        top1_values, top1_indices = torch.topk(x0, 1, dim=-1)
+        sparse_x0 = torch.zeros_like(x0).scatter_(-1, top1_indices, top1_values)
+        sparse_x0 = rearrange(sparse_x0, 'b h w d c -> b c h w d')
+
+        x0 = torch.where(c2s(sparse_x0) > 0.5, 1, 0).squeeze().cpu().numpy()
         imgs = []
         for i in range(3):
             img = visualize_voxel(x0[i])
             imgs.append(img)
-        return  {
+        
+        log_dict = {
             'key': 'samples',
             'images': imgs,
-            'caption': ['chair', 'airplane', 'table']
         }
+
+        if self.network.use_cfg:
+            log_dict['caption'] = ['chair', 'airplane', 'table']
+        
+        return log_dict
 

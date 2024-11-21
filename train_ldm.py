@@ -81,7 +81,7 @@ def main(args):
                 max_epochs=config.max_epochs,
                 accumulate_grad_batches=config.accumulate_grad,
                 log_every_n_steps=50,
-                # overfit_batches=10,
+                # overfit_batches=1,
                 # limit_train_batches=0.5,
                 # limit_val_batches=0.1,
                 )

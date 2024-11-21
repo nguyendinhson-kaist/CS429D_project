@@ -1,5 +1,5 @@
 model:
-  learning_rate: 5.0e-6
+  learning_rate: 1.0e-4
   params:
     monitor: val/loss
     resolution: 8
@@ -42,12 +42,12 @@ model:
       disc_factor: 0
       disc_in_channels: 8
       disc_num_layers: 3
-    ckpt_path: "./logs/train_vae_11-14-221818/epoch=82-step=87648.ckpt"
+    ckpt_path: "logs/train_vae_11-14-221818/epoch=98-step=104544.ckpt"
     ignore_keys: ["discriminator"]
 
 scheduler:
   num_train_timesteps: 1000
-  beta_1: 1e-4
+  beta_1: 1.0e-4
   beta_T: 0.02
   mode: "linear"
   sigma_type: "small"
