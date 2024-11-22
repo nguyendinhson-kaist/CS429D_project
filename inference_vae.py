@@ -23,7 +23,7 @@ def main(args):
     config.device = f"cuda:{args.gpu}"
 
     vae_config = OmegaConf.load(args.config)
-    save_dir = './vae_reconstruction/' + args.config.split("/")[-1].split(".")[0]
+    save_dir = './output/vae_reconstruction/' + args.exp_name
     os.makedirs(save_dir, exist_ok=True)
     OmegaConf.save(vae_config, f"./{save_dir}/{args.config.split('/')[-1]}")
 
@@ -55,8 +55,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--gpu", type=int, default=0)
     parser.add_argument("--target_categories", type=str, default=None)
-    parser.add_argument("--config", type=str)
-    parser.add_argument("--ckpt", type=str)
+    parser.add_argument("--config", type=str, required=True)
+    parser.add_argument("--ckpt", type=str, required=True)
+    parser.add_argument("--exp_name", type=str, required=True)
     args = parser.parse_args()
     seed_everything(0)
     main(args)
