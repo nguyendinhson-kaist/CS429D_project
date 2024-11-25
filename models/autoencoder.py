@@ -45,11 +45,15 @@ class AutoencoderKL(pl.LightningModule):
                  kl_weight=1,
                  ckpt_path=None,
                  ignore_keys=[],
+                 centering=False,
+                 occupied_weight=3e-3,
                  ):
         super().__init__()
         self.automatic_optimization = False
         self.encoder = Encoder(**ddconfig)
         self.decoder = Decoder(**ddconfig)
+        self.centering = centering # if True, assume the voxel to be -1/1. If False, assume 0/1
+        self.occupied_weight = occupied_weight
         assert ddconfig["double_z"]
         self.quant_conv = torch.nn.Conv3d(2*ddconfig["z_channels"], 2*embed_dim, 1)
         self.post_quant_conv = torch.nn.Conv3d(embed_dim, ddconfig["z_channels"], 1)
@@ -79,7 +83,20 @@ class AutoencoderKL(pl.LightningModule):
         self.load_state_dict(sd, strict=False)
         print(f"Restored from {path}")
 
+    def apply_centering(self, x):
+        if self.centering:
+            return 2*x - 1
+        else:
+            return x
+    
+    def inverse_centering(self, x):
+        if self.centering:
+            return (x + 1) / 2
+        else:
+            return x
+
     def encode(self, x):
+        x = self.apply_centering(x)
         h = self.encoder(x)
         moments = self.quant_conv(h)
         posterior = DiagonalGaussianDistribution(moments)
@@ -88,6 +105,7 @@ class AutoencoderKL(pl.LightningModule):
     def decode(self, z):
         z = self.post_quant_conv(z)
         dec = self.decoder(z)
+        dec = self.inverse_centering(dec)
         return dec
 
     def forward(self, input, sample_posterior=True):
@@ -117,7 +135,7 @@ class AutoencoderKL(pl.LightningModule):
     def loss(self, inputs, reconstructions, posteriors, optimizer_idx,
                 global_step, last_layer=None, cond=None, split="train",
                 weights=None):
-        weight = torch.where(inputs == 1.0, 1.0, 3e-3)
+        weight = torch.where(inputs == 1.0, 1.0, self.occupied_weight)
         rec_loss = F.mse_loss(inputs.contiguous(), reconstructions.contiguous(), reduction="none")
         rec_loss = torch.mean(rec_loss * weight)
         kl_loss = posteriors.kl()

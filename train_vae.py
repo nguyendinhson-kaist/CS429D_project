@@ -54,7 +54,10 @@ def main(args):
                                 disc_config=vae_config.model.params.disc_config,
                                 kl_weight=vae_config.model.params.kl_weight, 
                                 embed_dim=vae_config.model.params.embed_dim,
-                                learning_rate=vae_config.model.learning_rate)
+                                learning_rate=vae_config.model.learning_rate,
+                                centering=config.centering,
+                                occupied_weight=config.occupied_weight,
+                                )
     autoencoder.to(config.device)
     autoencoder.train()
 
@@ -89,6 +92,8 @@ if __name__ == "__main__":
     parser.add_argument("--config", type=str)
     parser.add_argument("--accumulate_grad", type=int, default=1)
     parser.add_argument("--transform", type=str, nargs="+", default=None)
+    parser.add_argument("--centering", action='store_true')
+    parser.add_argument("--occupied_weight", type=float, default=3e-3)
     args = parser.parse_args()
     seed_everything(0)
     main(args)
