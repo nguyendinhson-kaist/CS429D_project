@@ -61,7 +61,8 @@ def main(args):
     suffix = f"_{config.exp_name}" if config.exp_name else ""
     name = f"train_vae_{get_current_time()}" + suffix
     wandb_logger = WandbLogger(project="CS492D", name=name, entity="CS492d_team20")
-    checkpoint_callback = ModelCheckpoint(dirpath=f"logs/{name}", monitor="val/rec_loss", every_n_epochs=1, save_top_k=10)
+    checkpoint_callback = ModelCheckpoint(dirpath=f"logs/{name}", monitor="val/rec_loss", mode="min", filename="best-{epoch:02d}")
+    
     # lr_monitor = LearningRateMonitor(logging_interval='step')
 
     trainer = Trainer(

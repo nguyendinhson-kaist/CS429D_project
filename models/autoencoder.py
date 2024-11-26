@@ -117,7 +117,7 @@ class AutoencoderKL(pl.LightningModule):
     def loss(self, inputs, reconstructions, posteriors, optimizer_idx,
                 global_step, last_layer=None, cond=None, split="train",
                 weights=None):
-        weight = torch.where(inputs == 1.0, 1.0, 3e-3)
+        weight = torch.where(inputs == 1.0, 1.0, 1e-1)
         rec_loss = F.mse_loss(inputs.contiguous(), reconstructions.contiguous(), reduction="none")
         rec_loss = torch.mean(rec_loss * weight)
         kl_loss = posteriors.kl()

@@ -68,22 +68,22 @@ def main(args):
     diffusion_model.to(config.device)
     diffusion_model.train()
 
-    name = f"ldm_{get_current_time()}"
+    name = f"ldm_{get_current_time()}_{config.exp_name}"
     wandb_logger = WandbLogger(project="CS492D", name=name, entity="CS492d_team20")
-    checkpoint_callback = ModelCheckpoint(dirpath=f"logs/{name}", monitor="val/loss", every_n_epochs=1, save_top_k=10)
-    # lr_monitor = LearningRateMonitor(logging_interval='step')
+    best_checkpoint_callback = ModelCheckpoint(dirpath=f"logs/{name}", monitor="val/loss", mode="min", filename="best-{epoch:02d}")
+    every_checkpoint_callback = ModelCheckpoint(dirpath=f"logs/{name}", every_n_epochs=50, save_top_k=-1)
 
     trainer = Trainer(
                 logger=wandb_logger,
                 default_root_dir=f"logs/{name}",
-                callbacks=[checkpoint_callback],
+                callbacks=[best_checkpoint_callback, every_checkpoint_callback],
                 check_val_every_n_epoch=1,
                 max_epochs=config.max_epochs,
                 accumulate_grad_batches=config.accumulate_grad,
                 log_every_n_steps=50,
                 # overfit_batches=1,
-                # limit_train_batches=0.5,
-                # limit_val_batches=0.1,
+                # limit_train_batches=1,
+                # limit_val_batches=0,
                 )
     
     trainer.fit(diffusion_model, train_dl, val_dl)
@@ -95,7 +95,8 @@ if __name__ == "__main__":
     parser.add_argument("--target_categories", type=str, default=None)
     parser.add_argument("--config", type=str)
     parser.add_argument("--accumulate_grad", type=int, default=1)
-    parser.add_argument("--max_epochs", type=int, default=10)
+    parser.add_argument("--max_epochs", type=int, default=500)
+    parser.add_argument("--exp_name", type=str)
     args = parser.parse_args()
     seed_everything(0)
     main(args)
