@@ -8,6 +8,8 @@ import numpy as np
 from tqdm import tqdm
 from typing import Optional
 from einops import rearrange
+import os
+from eval import jensen_shannon_divergence, voxel_to_pointcloud, pairwise_CD, lgan_mmd_cov
 
 
 class Diffusion(pl.LightningModule):
@@ -77,14 +79,48 @@ class Diffusion(pl.LightningModule):
         label = label.to(self.device)
 
         B = x0.shape[0]
-        timestep = self.var_scheduler.uniform_sample_t(B, self.device)
-
+        timestep = torch.linspace(0, 999, steps=B, dtype=torch.int64).to(self.device)
         xt, eps = self.var_scheduler.add_noise(x0, timestep)
         pred_noise = self.network(xt, timestep, class_label=label)
 
         loss = F.mse_loss(pred_noise, eps)
         self.log("val/loss", loss)
         return {'loss': loss}
+    
+
+    @torch.no_grad()
+    def on_validation_epoch_end(self, *args, **kwrags):
+        eval_res = self.evaluation()
+        self.log_dict(eval_res)
+    
+
+    @torch.no_grad()
+    def evaluation(self):
+        category = "airplane"
+        cnt = 0
+        samples = []
+        while cnt < 100:
+            bs = min(100 - cnt, 32)
+            z0 = self.sample(bs)
+            x0 = self.vae.decode(z0)
+            x0 = torch.where(c2s(x0) > 0.5, 1, 0).squeeze().cpu()
+            samples.append(x0)
+            cnt += bs
+
+        X_gen = torch.concat(samples, dim=0)
+        shapenet_dir = "./data/hdf5_data"  # TODO: CHANGE THE PATH IF NEEDED.
+        val_set_path = os.path.join(shapenet_dir, f"{category}_voxels_val.npy")
+        assert os.path.exists(val_set_path), f"{val_set_path} not exist."
+
+        val_set = torch.from_numpy(np.load(val_set_path))
+        X_ref = val_set.float()[:100]
+
+        print("[*] Computing JSD...")
+        jsd_score = jensen_shannon_divergence(X_gen, X_ref)
+        print(f"JSD: {jsd_score}")
+        
+        res_dic = {'val/JSD': jsd_score}
+        return res_dic
 
 
     def configure_optimizers(self):
@@ -94,6 +130,7 @@ class Diffusion(pl.LightningModule):
         return opt
 
 
+    @torch.no_grad()
     def sample(
         self,
         batch_size,

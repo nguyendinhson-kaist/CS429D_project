@@ -62,15 +62,16 @@ def main(args):
     name = f"train_vae_{get_current_time()}" + suffix
     wandb_logger = WandbLogger(project="CS492D", name=name, entity="CS492d_team20")
     checkpoint_callback = ModelCheckpoint(dirpath=f"logs/{name}", monitor="val/rec_loss", mode="min", filename="best-{epoch:02d}")
+    every_checkpoint_callback = ModelCheckpoint(dirpath=f"logs/{name}", every_n_epochs=20, save_top_k=-1)
     
     # lr_monitor = LearningRateMonitor(logging_interval='step')
 
     trainer = Trainer(
                 logger=wandb_logger,
                 default_root_dir=f"logs/{name}",
-                callbacks=[checkpoint_callback],
+                callbacks=[checkpoint_callback, every_checkpoint_callback],
                 check_val_every_n_epoch=1,
-                max_epochs=500,
+                max_epochs=200,
                 log_every_n_steps=10,
                 accumulate_grad_batches=config.accumulate_grad,
                 # limit_train_batches=0.5,

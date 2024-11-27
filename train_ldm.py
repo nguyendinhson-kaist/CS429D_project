@@ -70,8 +70,8 @@ def main(args):
 
     name = f"ldm_{get_current_time()}_{config.exp_name}"
     wandb_logger = WandbLogger(project="CS492D", name=name, entity="CS492d_team20")
-    best_checkpoint_callback = ModelCheckpoint(dirpath=f"logs/{name}", monitor="val/loss", mode="min", filename="best-{epoch:02d}")
-    every_checkpoint_callback = ModelCheckpoint(dirpath=f"logs/{name}", every_n_epochs=50, save_top_k=-1)
+    best_checkpoint_callback = ModelCheckpoint(dirpath=f"logs/{name}", monitor="val/JSD", mode="min", filename="best-{epoch:02d}")
+    every_checkpoint_callback = ModelCheckpoint(dirpath=f"logs/{name}", every_n_epochs=25, save_top_k=-1)
 
     trainer = Trainer(
                 logger=wandb_logger,
@@ -95,7 +95,7 @@ if __name__ == "__main__":
     parser.add_argument("--target_categories", type=str, default=None)
     parser.add_argument("--config", type=str)
     parser.add_argument("--accumulate_grad", type=int, default=1)
-    parser.add_argument("--max_epochs", type=int, default=500)
+    parser.add_argument("--max_epochs", type=int, default=400)
     parser.add_argument("--exp_name", type=str)
     args = parser.parse_args()
     seed_everything(0)
