@@ -24,7 +24,7 @@ def main(args):
     vae_config = OmegaConf.load(args.config)
 
     ds_module = ShapeNetDataModule2(
-        ".",
+        "data/",
         batch_size=vae_config.data.batch_size,
         num_workers=vae_config.data.num_workers,
     )
@@ -44,12 +44,12 @@ def main(args):
     autoencoder.eval()
     label_dict = {1: "chair", 2: "airplane", 3: "table"}
     
-    os.makedirs("./latent_data/train/chair", exist_ok=True)
-    os.makedirs("./latent_data/train/airplane", exist_ok=True)
-    os.makedirs("./latent_data/train/table", exist_ok=True)
-    os.makedirs("./latent_data/val/chair", exist_ok=True)
-    os.makedirs("./latent_data/val/airplane", exist_ok=True)
-    os.makedirs("./latent_data/val/table", exist_ok=True)
+    os.makedirs("data/latent_data/train/chair", exist_ok=True)
+    os.makedirs("data/latent_data/train/airplane", exist_ok=True)
+    os.makedirs("data/latent_data/train/table", exist_ok=True)
+    os.makedirs("data/latent_data/val/chair", exist_ok=True)
+    os.makedirs("data/latent_data/val/airplane", exist_ok=True)
+    os.makedirs("data/latent_data/val/table", exist_ok=True)
 
     with torch.no_grad():
         cnt = 1
@@ -61,7 +61,7 @@ def main(args):
             z = z.detach().cpu().numpy()
             label = label.detach().cpu().numpy()
             for i in range(len(z)):
-                np.save(f"./latent_data/train/{label_dict[label[i]]}/{cnt}.npy", z[i])
+                np.save(f"data/latent_data/train/{label_dict[label[i]]}/{cnt}.npy", z[i])
                 cnt += 1
         
         cnt = 1
@@ -73,7 +73,7 @@ def main(args):
             z = z.detach().cpu().numpy()
             label = label.detach().cpu().numpy()
             for i in range(len(z)):
-                np.save(f"./latent_data/val/{label_dict[label[i]]}/{cnt}.npy", z[i])
+                np.save(f"data/latent_data/val/{label_dict[label[i]]}/{cnt}.npy", z[i])
                 cnt += 1
 
     
