@@ -1,5 +1,9 @@
 # Install Requirement
+
 ```
+conda create -n project python=3.10
+conda activate project
+pip install "cython<3.0.0" && pip install --no-build-isolation pyyaml==5.4.1
 pip install -r requirements.txt
 ```
 
@@ -42,7 +46,7 @@ Example command to get reconstruciton data for val and test sets:
 ```
 CUDA_VISIBLE_DEVICES=0 \
 python inference_vae.py \
-    --config configs/vae/config_nodisc_kl1e-6.yaml \
+    --config configs/vae/config_nodisc_kl1e-6_64.yaml \
     --exp_name cond_64_airplane \
     --ckpt ckpt/train_vae_11-22-212308_cond_64_nos2c_w1e-1/epoch=238-step=504768.ckpt \
     --target_categories airplane
