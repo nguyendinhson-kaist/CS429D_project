@@ -55,11 +55,11 @@ python inference_vae.py \
     --config configs/vae/config_nodisc_kl1e-6_64.yaml \
     --exp_name cond_64_airplane \
     --ckpt ckpt/train_vae_11-22-212308_cond_64_nos2c_w1e-1/epoch=238-step=504768.ckpt \
-    --target_categories airplane
+    --target_categories <category>
 ```
-(Values for `target_categories`: "airplane", "table", "chair")
+`<category>` is selected in [ "table", "chair", "airplane" ]
 
-Get metric measurement for reconstruction
+To get metric measurement for reconstruction
 ```
 python eval.py airplane output/vae_reconstruction/cond_64_airplane/rec_data.npy
 ```
@@ -74,7 +74,7 @@ python inference_ldm.py \
     --output_dir ldm/cond_64_JSD_cfg0.0_ep399 \
     --target_category <category>
 ```
-`<category>` is in 1 value in [ "table", "chair", "airplane" ]
+`<category>` is selected in [ "table", "chair", "airplane" ]
 
 Command lines to get `quantitative measurement`:
 ```
