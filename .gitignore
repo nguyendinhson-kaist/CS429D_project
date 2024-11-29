@@ -9,3 +9,4 @@ wandb/
 vae_reconstruction
 vae_reconstruction_origin
 output/*
+results/*
