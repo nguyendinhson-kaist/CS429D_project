@@ -7,6 +7,12 @@ pip install "cython<3.0.0" && pip install --no-build-isolation pyyaml==5.4.1
 pip install -r requirements.txt
 ```
 
+# Checkpoint Preparation
+- In case there is no checkpoint zipped together with this code, please download the checkpoint from this [link](https://drive.google.com/drive/folders/1lZjMsKsdQCYqEGIgsCGPmQ3AWiEOUZr4).
+
+- Unzip the file and the checkpoint is ready for use.
+
+
 # Data Preparation for LDM
 Run the following commands in order:
 ```
