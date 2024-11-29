@@ -71,8 +71,8 @@ Command lines to get `quantitative measurement`:
 python eval.py chair output/ldm/cond_64_JSD_cfg0.0_ep399/chair/samples.npy
 ```
 ```
-python eval.py chair output/ldm/cond_64_JSD_cfg0.0_ep399/table/samples.npy
+python eval.py table output/ldm/cond_64_JSD_cfg0.0_ep399/table/samples.npy
 ```
 ```
-python eval.py chair output/ldm/cond_64_JSD_cfg0.0_ep399/airplane/samples.npy
+python eval.py airplane output/ldm/cond_64_JSD_cfg0.0_ep399/airplane/samples.npy
 ```
