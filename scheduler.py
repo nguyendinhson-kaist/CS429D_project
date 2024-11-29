@@ -104,7 +104,7 @@ class DDPMScheduler(BaseScheduler):
     # https://nn.labml.ai/diffusion/ddpm/utils.html
     def _get_teeth(self, consts: torch.Tensor, t: torch.Tensor): # get t th const 
         const = consts.gather(-1, t)
-        return const.reshape(-1, 1, 1, 1)
+        return const.reshape(-1, 1, 1, 1, 1)
     
     def add_noise(
         self,

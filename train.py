@@ -43,14 +43,12 @@ def main(args):
         json.dump(config, f, indent=2)
     """######"""
 
-    image_resolution = 64
     ds_module = ShapeNetDataModule(
         "./data",
-        target_categories=config.target_categories,
+        target_category=config.target_category,
         batch_size=config.batch_size,
         num_workers=config.num_workers,
-        max_num_images_per_cat=config.max_num_images_per_cat,
-        image_resolution=image_resolution
+        max_num_images_per_cat=config.max_num_images_per_cat
     )
 
     train_dl = ds_module.train_dataloader()
@@ -64,10 +62,11 @@ def main(args):
         mode="linear",
     )
 
+    #TODO: modify UNet
     network = UNet(
         T=config.num_diffusion_train_timesteps,
-        image_resolution=image_resolution,
-        ch=128,
+        # ch=128,
+        ch=16,
         ch_mult=[1, 2, 2, 2],
         attn=[1],
         num_res_blocks=4,
@@ -89,7 +88,7 @@ def main(args):
     losses = []
     with tqdm(initial=step, total=config.train_num_steps) as pbar:
         while step < config.train_num_steps:
-            if step % config.log_interval == 0:
+            if step % config.log_interval == 0 and step > 0:
                 ddpm.eval()
                 plt.plot(losses)
                 plt.savefig(f"{save_dir}/loss.png")
@@ -104,11 +103,11 @@ def main(args):
                 else:  # Unconditional training
                     samples = ddpm.sample(4, return_traj=False)
 
-                pil_images = tensor_to_pil_image(samples)
+                pil_images = [tensor_to_pil_image(sample) for sample in samples]
                 for i, img in enumerate(pil_images):
                     img.save(save_dir / f"step={step}-{i}.png")
 
-                ddpm.save(f"{save_dir}/last.ckpt")
+                ddpm.save(f"{save_dir}/{step}.ckpt")
                 ddpm.train()
 
             img, label = next(train_it)
@@ -134,7 +133,7 @@ if __name__ == "__main__":
     parser.add_argument("--gpu", type=int, default=0)
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--num_workers", type=int, default=4)
-    parser.add_argument("--target_categories", type=str)
+    parser.add_argument("--target_category", type=str)
     parser.add_argument(
         "--train_num_steps",
         type=int,

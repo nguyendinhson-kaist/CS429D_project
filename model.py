@@ -14,9 +14,6 @@ class DiffusionModule(nn.Module):
         self.var_scheduler = var_scheduler
 
     def get_loss(self, x0, class_label=None, noise=None):
-        ######## TODO ########
-        # DO NOT change the code outside this part.
-        # compute noise matching loss.
         B = x0.shape[0]
         timestep = self.var_scheduler.uniform_sample_t(B, self.device)
 
@@ -25,7 +22,6 @@ class DiffusionModule(nn.Module):
         eps_theta = self.network(xt, timestep, class_label)
 
         loss = F.mse_loss(eps_theta, esp)
-        ######################
         return loss
     
     @property
@@ -34,7 +30,7 @@ class DiffusionModule(nn.Module):
 
     @property
     def image_resolution(self):
-        return self.network.image_resolution
+        return 64
 
     @torch.no_grad()
     def sample(
@@ -44,28 +40,20 @@ class DiffusionModule(nn.Module):
         class_label: Optional[torch.Tensor] = None,
         guidance_scale: Optional[float] = 0.0,
     ):
-        x_T = torch.randn([batch_size, 3, self.image_resolution, self.image_resolution]).to(self.device)
+        x_T = torch.randn([batch_size, 1, self.image_resolution, self.image_resolution, self.image_resolution]).to(self.device)
 
         do_classifier_free_guidance = guidance_scale > 0.0
 
         if do_classifier_free_guidance:
-
-            ######## TODO ########
-            # Assignment 2-3. Implement the classifier-free guidance.
-            # Specifically, given a tensor of shape (batch_size,) containing class labels,
-            # create a tensor of shape (2*batch_size,) where the first half is filled with zeros (i.e., null condition).
             assert class_label is not None
             assert len(class_label) == batch_size, f"len(class_label) != batch_size. {len(class_label)} != {batch_size}"
             class_label = class_label.to(self.device)
             class_label = torch.cat([torch.zeros_like(class_label), class_label])
-            #######################
 
         traj = [x_T]
         for t in tqdm(self.var_scheduler.timesteps):
             x_t = traj[-1]
             if do_classifier_free_guidance:
-                ######## TODO ########
-                # Assignment 2. Implement the classifier-free guidance.
                 null_c_noise_pred = self.network(
                     x_t,
                     timestep=t.to(self.device),
@@ -78,7 +66,6 @@ class DiffusionModule(nn.Module):
                 )
 
                 noise_pred = (1 + guidance_scale) * c_noise_pred - guidance_scale * null_c_noise_pred
-                #######################
             else:
                 noise_pred = self.network(
                     x_t,

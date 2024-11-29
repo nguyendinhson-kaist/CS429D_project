@@ -8,6 +8,10 @@ import torchvision.transforms as transforms
 from PIL import Image
 
 import numpy as np
+from io import BytesIO
+import matplotlib.pyplot as plt
+
+from einops import rearrange
 
 
 def listdir(dname):
@@ -21,21 +25,107 @@ def listdir(dname):
     )
     return fnames
 
+class Compressor:
+    def compress(self, data: np.ndarray) -> np.ndarray:
+        raise NotImplementedError
+    
+    def decompress(self, data: np.ndarray) -> np.ndarray:
+        raise NotImplementedError
+    
+
+class CubeDecimalCompressor(Compressor):
+    def __init__(self, cube_size: int = 2, device='cuda'):
+        self.cube_size = cube_size
+        self.device = device
+
+    def compress(self, data: np.ndarray) -> np.ndarray:
+        # to tensor
+        data = torch.tensor(data, device=self.device).float()
+
+        # (H x W x D) -> (H//cube_size x W//cube_size x D//cube_size x cube_size x cube_size x cube_size)
+        data = rearrange(data, '(h h1) (w w1) (d d1) -> h w d h1 w1 d1', h1=self.cube_size, w1=self.cube_size, d1=self.cube_size)
+        data = data.flatten(start_dim=-3)
+
+        # convert last dim from binary to decimal
+        data = data @ (2. ** torch.arange(self.cube_size ** 3, device=self.device))
+
+        # normalize to [-1, 1] (zero mean)
+        mean = 2. ** (self.cube_size ** 3 - 1)
+        data = (data - mean) / mean
+
+        return data.cpu().numpy()
+    
+    def decompress(self, data: np.ndarray) -> np.ndarray:
+        # to tensor
+        data = torch.tensor(data, device=self.device).float()
+
+        # denormalize
+        mean = 2. ** (self.cube_size ** 3 - 1)
+        data = data * mean + mean
+        data = data.round()
+
+        # convert decimal to binary
+        data = data.unsqueeze(-1) // (2. ** torch.arange(self.cube_size ** 3, device=self.device))
+        data = data % 2
+
+        # (H//cube_size x W//cube_size x D//cube_size x cube_size x cube_size x cube_size) -> (H x W x D)
+        data = rearrange(data, 'h w d (h1 w1 d1) -> (h h1) (w w1) (d d1)', h1=self.cube_size, w1=self.cube_size, d1=self.cube_size)
+
+        return data.cpu().numpy()
+
 
 def tensor_to_pil_image(x: torch.Tensor, single_image=False):
-    """
-    x: [B,C,H,W]
-    """
-    if x.ndim == 3:
-        x = x.unsqueeze(0)
-        single_image = True
+    # """
+    # x: [B,C,H,W]
+    # """
+    # if x.ndim == 3:
+    #     x = x.unsqueeze(0)
+    #     single_image = True
 
-    x = (x * 0.5 + 0.5).clamp(0, 1).detach().cpu().permute(0, 2, 3, 1).numpy()
-    images = (x * 255).round().astype("uint8")
-    images = [Image.fromarray(image) for image in images]
-    if single_image:
-        return images[0]
-    return images
+    # x = (x * 0.5 + 0.5).clamp(0, 1).detach().cpu().permute(0, 2, 3, 1).numpy()
+    # images = (x * 255).round().astype("uint8")
+    # images = [Image.fromarray(image) for image in images]
+    # if single_image:
+    #     return images[0]
+    # return images
+
+    # compressor = CubeDecimalCompressor()
+    # voxel_grid = compressor.decompress(x.squeeze(0).cpu().numpy())
+
+    # Get the coordinates of occupied voxels
+    voxel_grid = x.squeeze(0).cpu().numpy()
+    occupied_voxels = np.argwhere(voxel_grid >= 0.5)
+
+    # Create a 3D plot
+    fig = plt.figure()
+    plt.tight_layout()
+
+    ax = fig.add_subplot(111, projection='3d')
+
+    # Plot occupied voxels as scatter points
+    ax.scatter(occupied_voxels[:, 0], occupied_voxels[:, 2], occupied_voxels[:, 1])
+
+    # Set labels
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
+
+    # Set the aspect ratio to be equal
+    ax.set_box_aspect([1, 1, 1])
+
+    # Set the limits for the axes
+    ax.set_xlim([0, voxel_grid.shape[0]])
+    ax.set_ylim([0, voxel_grid.shape[1]])
+    ax.set_zlim([0, voxel_grid.shape[2]])
+    
+    ax.axis("off")
+    buf = BytesIO()
+    plt.savefig(buf, format='png')
+    buf.seek(0)  # Move the buffer cursor to the beginning
+    plt.close()
+    # Convert the buffer into a Pillow Image
+    img = Image.open(buf)
+    return img
 
 
 def get_data_iterator(iterable):
@@ -52,7 +142,13 @@ def get_data_iterator(iterable):
 
 class ShapeNetDataset(torch.utils.data.Dataset):
     def __init__(
-        self, root: str, split: str, target_category: str=None, transform=None, max_num_images_per_cat=-1, label_offset=1
+        self, 
+        root: str, 
+        split: str, 
+        target_category: str=None, 
+        transform=None, 
+        max_num_images_per_cat=-1, 
+        label_offset=1
     ):
         super().__init__()
         assert split in ["train", "val", "test"], f"Invalid split: {split}"
@@ -62,9 +158,9 @@ class ShapeNetDataset(torch.utils.data.Dataset):
         self.max_num_images_per_cat = max_num_images_per_cat
         self.label_offset = label_offset
 
-        categories = ['chair', 'airplane', 'table']
+        categories = ['airplane', 'chair', 'table']
 
-        # assert target_categories
+        # assert target_category
         if target_category:
             assert target_category in categories, f"Invalid categories: {target_category}"
             categories = [target_category]
@@ -72,8 +168,17 @@ class ShapeNetDataset(torch.utils.data.Dataset):
         self.num_classes = len(categories)
 
         imgs, labels = [], []
-        for idx, cat in enumerate(sorted(categories)):
+        for idx, cat in enumerate(categories):
+            # if self.split == "train":
+            #     cat_imgs = np.load(Path.joinpath(Path(root), f"enc_{cat}_{split}.npy"))
+            # else:
+            #     cat_imgs = np.load(Path.joinpath(Path(root), f"{cat}_voxels_{split}.npy"))
+            
             cat_imgs = np.load(Path.joinpath(Path(root), f"{cat}_voxels_{split}.npy"))
+
+            if self.max_num_images_per_cat > 0:
+                cat_imgs = cat_imgs[:self.max_num_images_per_cat]
+
             imgs.append(cat_imgs)
             labels += [idx + label_offset] * len(cat_imgs) # label 0 is for null class.
 
@@ -87,6 +192,8 @@ class ShapeNetDataset(torch.utils.data.Dataset):
         if self.transform is not None:
             img = self.transform(img)
 
+        img = torch.tensor(img).float().unsqueeze(0)
+
         return img, label
 
     def __len__(self):
@@ -97,7 +204,7 @@ class ShapeNetDataModule(object):
     def __init__(
         self,
         root: str = "data",
-        target_categories: str=None,
+        target_category: str=None,
         batch_size: int = 32,
         num_workers: int = 4,
         max_num_images_per_cat: int = 1000,
@@ -111,7 +218,7 @@ class ShapeNetDataModule(object):
         self.max_num_images_per_cat = max_num_images_per_cat
         self.label_offset = label_offset
         self.transform = transform
-        self.target_categories = target_categories
+        self.target_category = target_category
 
         assert os.path.exists(self.hdf5_root), f"{self.hdf5_root} does not exist. Please download the dataset."
 
@@ -127,7 +234,7 @@ class ShapeNetDataModule(object):
         self.train_ds = ShapeNetDataset(
             self.hdf5_root,
             "train",
-            self.target_categories,
+            self.target_category,
             self.transform,
             max_num_images_per_cat=self.max_num_images_per_cat,
             label_offset=self.label_offset
@@ -136,7 +243,7 @@ class ShapeNetDataModule(object):
             self.hdf5_root,
             "val",
             self.transform,
-            self.target_categories,
+            self.target_category,
             max_num_images_per_cat=self.max_num_images_per_cat,
             label_offset=self.label_offset,
         )

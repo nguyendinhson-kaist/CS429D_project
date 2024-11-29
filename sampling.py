@@ -9,6 +9,7 @@ from pathlib import Path
 
 
 def main(args):
+    print("Sampling images..., class_label:", args.class_label)
     save_dir = Path(args.save_dir)
     save_dir.mkdir(exist_ok=True, parents=True)
 
@@ -27,7 +28,8 @@ def main(args):
         mode="linear",
     ).to(device)
 
-    total_num_samples = 500
+    total_num_samples = 1000
+    voxel_samples = []
     num_batches = int(np.ceil(total_num_samples / args.batch_size))
 
     for i in range(num_batches):
@@ -39,7 +41,8 @@ def main(args):
             assert ddpm.network.use_cfg, f"The model was not trained to support CFG."
             samples = ddpm.sample(
                 B,
-                class_label=torch.randint(1, 4, (B,)),
+                # class_label=torch.randint(1, 4, (B,)),
+                class_label=torch.full((B,), args.class_label, dtype=torch.long),
                 guidance_scale=args.cfg_scale,
             )
         else:
@@ -49,12 +52,18 @@ def main(args):
                 guidance_scale=0.0,
             )
 
-        pil_images = tensor_to_pil_image(samples)
+        pil_images = [tensor_to_pil_image(sample) for sample in samples]
+
+        voxel_grid = samples.cpu().numpy()
+        voxel_grid[voxel_grid >= 0.5] = 1.
+        voxel_grid[voxel_grid < 0.5] = 0.
+        voxel_samples.append(voxel_grid)
 
         for j, img in zip(range(sidx, eidx), pil_images):
             img.save(save_dir / f"{j}.png")
             print(f"Saved the {j}-th image.")
 
+    np.save(save_dir / "voxel_samples.npy", np.concatenate(voxel_samples, axis=0))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -62,9 +71,10 @@ if __name__ == "__main__":
     parser.add_argument("--gpu", type=int, default=0)
     parser.add_argument("--ckpt_path", type=str)
     parser.add_argument("--save_dir", type=str)
+    parser.add_argument("--class_label", type=int, default=0)
     parser.add_argument("--use_cfg", action="store_true")
     parser.add_argument("--sample_method", type=str, default="ddpm")
-    parser.add_argument("--cfg_scale", type=float, default=7.5)
+    parser.add_argument("--cfg_scale", type=float, default=1.5)
 
     args = parser.parse_args()
     main(args)

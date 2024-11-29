@@ -9,9 +9,8 @@ from torch.nn import init
 
 
 class UNet(nn.Module):
-    def __init__(self, T=1000, image_resolution=64, ch=128, ch_mult=[1,2,2,2], attn=[1], num_res_blocks=4, dropout=0.1, use_cfg=False, cfg_dropout=0.1, num_classes=None):
+    def __init__(self, T=1000, ch=128, ch_mult=[1,2,2,2], attn=[1], num_res_blocks=4, dropout=0.1, use_cfg=False, cfg_dropout=0.1, num_classes=None):
         super().__init__()
-        self.image_resolution = image_resolution
         assert all([i < len(ch_mult) for i in attn]), 'attn index out of bound'
         tdim = ch * 4
         # self.time_embedding = TimeEmbedding(T, ch, tdim)
@@ -25,7 +24,7 @@ class UNet(nn.Module):
             cdim = tdim
             self.class_embedding = nn.Embedding(num_classes+1, cdim)
 
-        self.head = nn.Conv2d(3, ch, kernel_size=3, stride=1, padding=1)
+        self.head = nn.Conv3d(1, ch, kernel_size=3, stride=1, padding=1)
         self.downblocks = nn.ModuleList()
         chs = [ch]  # record output channel when dowmsample for upsample
         now_ch = ch
@@ -34,7 +33,8 @@ class UNet(nn.Module):
             for _ in range(num_res_blocks):
                 self.downblocks.append(ResBlock(
                     in_ch=now_ch, out_ch=out_ch, tdim=tdim,
-                    dropout=dropout, attn=(i in attn)))
+                    # dropout=dropout, attn=(i in attn)))
+                    dropout=dropout, attn=False))
                 now_ch = out_ch
                 chs.append(now_ch)
             if i != len(ch_mult) - 1:
@@ -42,7 +42,8 @@ class UNet(nn.Module):
                 chs.append(now_ch)
 
         self.middleblocks = nn.ModuleList([
-            ResBlock(now_ch, now_ch, tdim, dropout, attn=True),
+            # ResBlock(now_ch, now_ch, tdim, dropout, attn=True),
+            ResBlock(now_ch, now_ch, tdim, dropout, attn=False),
             ResBlock(now_ch, now_ch, tdim, dropout, attn=False),
         ])
 
@@ -52,16 +53,18 @@ class UNet(nn.Module):
             for _ in range(num_res_blocks + 1):
                 self.upblocks.append(ResBlock(
                     in_ch=chs.pop() + now_ch, out_ch=out_ch, tdim=tdim,
-                    dropout=dropout, attn=(i in attn)))
+                    # dropout=dropout, attn=(i in attn)))
+                    dropout=dropout, attn=False))
                 now_ch = out_ch
             if i != 0:
                 self.upblocks.append(UpSample(now_ch))
         assert len(chs) == 0
 
         self.tail = nn.Sequential(
-            nn.GroupNorm(32, now_ch),
+            # nn.GroupNorm(32, now_ch),
+            nn.GroupNorm(4, now_ch),
             Swish(),
-            nn.Conv2d(now_ch, 3, 3, stride=1, padding=1)
+            nn.Conv3d(now_ch, 1, 3, stride=1, padding=1)
         )
         self.initialize()
 
@@ -77,24 +80,14 @@ class UNet(nn.Module):
 
         if self.use_cfg and class_label is not None:
             if self.training:
-                assert not torch.any(class_label == 0) # 0 for null.
-                
-                ######## TODO ########
-                # DO NOT change the code outside this part.
-                # Assignment 2-2. Implement random null conditioning in CFG training.
-                
+                assert not torch.any(class_label == 0) 
                 p = torch.rand(class_label.shape[0]).to(x.device)
                 null_mask = p < self.cfg_dropout
                 class_label[null_mask] = 0
-                #######################
-            
-            ######## TODO ########
-            # DO NOT change the code outside this part.
-            # Assignment 2-1. Implement class conditioning
+
             class_label = class_label.to(x.device)
             class_emb = self.class_embedding(class_label)
             temb = temb + class_emb
-            #######################
 
         # Downsampling
         h = self.head(x)
