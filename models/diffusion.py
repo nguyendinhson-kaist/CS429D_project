@@ -88,39 +88,39 @@ class Diffusion(pl.LightningModule):
         return {'loss': loss}
     
 
-    @torch.no_grad()
-    def on_validation_epoch_end(self, *args, **kwrags):
-        eval_res = self.evaluation()
-        self.log_dict(eval_res)
+    # @torch.no_grad()
+    # def on_validation_epoch_end(self, *args, **kwrags):
+    #     eval_res = self.evaluation()
+    #     self.log_dict(eval_res)
     
 
-    @torch.no_grad()
-    def evaluation(self):
-        category = "airplane"
-        cnt = 0
-        samples = []
-        while cnt < 100:
-            bs = min(100 - cnt, 32)
-            z0 = self.sample(bs)
-            x0 = self.vae.decode(z0)
-            x0 = torch.where(c2s(x0) > 0.5, 1, 0).squeeze().cpu()
-            samples.append(x0)
-            cnt += bs
+    # @torch.no_grad()
+    # def evaluation(self):
+    #     category = "airplane"
+    #     cnt = 0
+    #     samples = []
+    #     while cnt < 100:
+    #         bs = min(100 - cnt, 32)
+    #         z0 = self.sample(bs)
+    #         x0 = self.vae.decode(z0)
+    #         x0 = torch.where(c2s(x0) > 0.5, 1, 0).squeeze().cpu()
+    #         samples.append(x0)
+    #         cnt += bs
 
-        X_gen = torch.concat(samples, dim=0)
-        shapenet_dir = "./data/hdf5_data"  # TODO: CHANGE THE PATH IF NEEDED.
-        val_set_path = os.path.join(shapenet_dir, f"{category}_voxels_val.npy")
-        assert os.path.exists(val_set_path), f"{val_set_path} not exist."
+    #     X_gen = torch.concat(samples, dim=0)
+    #     shapenet_dir = "./data/hdf5_data"  # TODO: CHANGE THE PATH IF NEEDED.
+    #     val_set_path = os.path.join(shapenet_dir, f"{category}_voxels_val.npy")
+    #     assert os.path.exists(val_set_path), f"{val_set_path} not exist."
 
-        val_set = torch.from_numpy(np.load(val_set_path))
-        X_ref = val_set.float()[:100]
+    #     val_set = torch.from_numpy(np.load(val_set_path))
+    #     X_ref = val_set.float()[:100]
 
-        print("[*] Computing JSD...")
-        jsd_score = jensen_shannon_divergence(X_gen, X_ref)
-        print(f"JSD: {jsd_score}")
+    #     print("[*] Computing JSD...")
+    #     jsd_score = jensen_shannon_divergence(X_gen, X_ref)
+    #     print(f"JSD: {jsd_score}")
         
-        res_dic = {'val/JSD': jsd_score}
-        return res_dic
+    #     res_dic = {'val/JSD': jsd_score}
+    #     return res_dic
 
 
     def configure_optimizers(self):
@@ -137,6 +137,7 @@ class Diffusion(pl.LightningModule):
         return_traj=False,
         class_label: Optional[torch.Tensor] = None,
         guidance_scale: Optional[float] = 0.0,
+        self_guidance: Optional[float] = 0.0,
     ):  
         x_T = torch.randn([batch_size, self.in_ch, self.resolution, self.resolution, self.resolution]).to(self.device)
 
@@ -166,6 +167,11 @@ class Diffusion(pl.LightningModule):
                     timestep=t.to(self.device),
                     class_label=class_label,
                 )
+
+            if self_guidance > 0.0:
+                assert self.bad_network is not None
+                bad_noise_pred = self.bad_network(x_t, timestep=t.to(self.device), class_label=class_label)
+                noise_pred = (1 + self_guidance) * noise_pred - self_guidance * bad_noise_pred
 
             x_t_prev = self.var_scheduler.step(x_t, t, noise_pred)
 

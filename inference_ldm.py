@@ -44,6 +44,7 @@ def main(args):
         sigma_type=model_config.scheduler.sigma_type,
     )
 
+    model_config.model.vae.ckpt_path = None
     diffusion_model = Diffusion(
         unet_config=model_config.model.params,
         vae_config=model_config.model.vae,
@@ -55,6 +56,21 @@ def main(args):
     )
     diffusion_model.to(config.device)
     diffusion_model.eval()
+
+    if config.self_guidance > 0.0:
+        bad_model = Diffusion(
+            unet_config=model_config.model.params,
+            vae_config=model_config.model.vae,
+            learning_rate=model_config.model.learning_rate,
+            var_scheduler=var_scheduler,
+            ignore_keys=["discriminator"],
+            num_classes=ds_module.num_classes,
+            ckpt_path=config.bad_ckpt,
+        )
+        bad_model.to(config.device)
+        bad_model.eval()
+        diffusion_model.bad_network = bad_model.network
+        del bad_model
 
     output_dir = 'output/' + config.output_dir
     if config.target_category is not None:
@@ -68,12 +84,12 @@ def main(args):
     with torch.no_grad():
         while cnt < 1000:
             bs = min(1000 - cnt, config.batch_size)
-            if model_config.model.params.use_cfg:
+            if model_config.model.params.use_cfg: # Train with cfg
                 assert config.target_category is not None and config.target_category in label_dict
                 target_label = torch.tensor([label_dict[config.target_category]] * bs).to(config.device)
-                z0 = diffusion_model.sample(bs, class_label=target_label, guidance_scale=config.cfg)
-            else:
-                z0 = diffusion_model.sample(bs)
+                z0 = diffusion_model.sample(bs, class_label=target_label, guidance_scale=config.cfg, self_guidance=config.self_guidance)
+            else: # Train without cfg
+                z0 = diffusion_model.sample(bs, self_guidance=config.self_guidance)
             x0 = diffusion_model.vae.decode(z0)
             x0 = torch.where(c2s(x0) > 0.5, 1, 0).squeeze().cpu().numpy()
             samples.append(x0)
@@ -97,6 +113,8 @@ if __name__ == "__main__":
     parser.add_argument("--ckpt", type=str)
     parser.add_argument("--output_dir", type=str)
     parser.add_argument("--batch_size", type=int, default=32)
+    parser.add_argument("--self_guidance", type=float, default=0.0)
+    parser.add_argument("--bad_ckpt", type=str)
     parser.add_argument("--cfg", type=float, default=0.0)
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
