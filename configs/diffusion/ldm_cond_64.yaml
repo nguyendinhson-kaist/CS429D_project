@@ -1,0 +1,58 @@
+model:
+  learning_rate: 1.0e-4
+  params:
+    monitor: val/loss
+    resolution: 8
+    in_ch: 8
+    ch: 128
+    ch_mult:
+    - 1
+    - 2
+    - 2
+    - 4
+    attn: [1]
+    num_res_blocks: 4
+    dropout: 0.1
+    use_cfg: true
+    cfg_dropout: 0.1
+  vae:
+    embed_dim: 8
+    kl_weight: 1.0e-6
+    ddconfig:
+      double_z: true
+      z_channels: 8
+      resolution: 64
+      in_ch: 1
+      out_ch: 1
+      ch: 128
+      ch_mult:
+      - 1
+      - 1
+      - 2
+      - 4
+      num_res_blocks: 1
+      attn_resolutions: []
+      dropout: 0.1
+      sigmoid_out: true
+    disc_config:
+      disc_start: 500000000
+      disc_weight: 0.5
+      disc_loss: "vanilla"
+      disc_conditional: false
+      disc_factor: 0
+      disc_in_channels: 1
+      disc_num_layers: 3
+    ckpt_path: "ckpt/train_vae_11-22-212308_cond_64_nos2c_w1e-1/epoch=238-step=504768.ckpt"
+    ignore_keys: ["discriminator"]
+
+scheduler:
+  num_train_timesteps: 1000
+  beta_1: 1.0e-4
+  beta_T: 0.02
+  mode: "linear"
+  sigma_type: "small"
+
+data:
+  batch_size: 128
+  num_workers: 8
+  wrap: true

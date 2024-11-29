@@ -6,10 +6,10 @@ from pathlib import Path
 import matplotlib
 import matplotlib.pyplot as plt
 import torch
-from dataset import ShapeNetDataModule, get_data_iterator, tensor_to_pil_image
+from data.dataset import ShapeNetDataModule, get_data_iterator, tensor_to_pil_image
 from dotmap import DotMap
 from model import DiffusionModule
-from network import UNet
+from models.network import UNet
 from pytorch_lightning import seed_everything
 from scheduler import DDPMScheduler
 from torchvision.transforms.functional import to_pil_image

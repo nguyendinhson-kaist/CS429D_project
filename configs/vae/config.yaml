@@ -1,0 +1,28 @@
+model:
+  learning_rate: 1.0e-5
+  target: models.autoencoder.AutoencoderKL
+  params:
+    monitor: val/rec_loss
+    embed_dim: 8
+    kl_weight: 1
+    ddconfig:
+      double_z: true
+      z_channels: 8
+      resolution: 64 # 128 / 2 s2c
+      in_ch: 8
+      out_ch: 8
+      ch: 128
+      ch_mult:
+      - 1
+      - 1
+      - 2
+      - 2
+      - 4
+      num_res_blocks: 1
+      attn_resolutions: []
+      dropout: 0.0
+      sigmoid_out: true
+data:
+  batch_size: 8
+  num_workers: 4
+  wrap: true

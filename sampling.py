@@ -2,7 +2,7 @@ import argparse
 
 import numpy as np
 import torch
-from dataset import tensor_to_pil_image
+from .data.dataset import tensor_to_pil_image
 from model import DiffusionModule
 from scheduler import DDPMScheduler
 from pathlib import Path
